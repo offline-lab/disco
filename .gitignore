@@ -1,0 +1,34 @@
+# Binaries
+nss-daemon
+nss-status
+nss-query
+nss-key
+nss-config-validate
+nss-ping
+nss-dns
+nss-announce
+ping
+
+# NSS Module
+libnss_daemon.so.2
+libnss_daemon.so
+
+# Test files
+test-keys.json
+*.log
+test-logs/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.o
+*.a

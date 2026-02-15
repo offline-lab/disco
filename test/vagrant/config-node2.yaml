@@ -1,0 +1,24 @@
+daemon:
+  socket_path: "/run/nss-daemon.sock"
+  broadcast_interval: 5s
+  record_ttl: 300s
+
+network:
+  interfaces: ["eth1"]
+  broadcast_addr: "192.168.56.255:5354"
+  max_broadcast_rate: 10
+
+discovery:
+  enabled: true
+  detect_services: true
+  service_port_mapping:
+    www: [80, 443, 8080]
+    ssh: [22]
+  scan_interval: 30s
+
+security:
+  enabled: false
+
+logging:
+  level: "debug"
+  format: "text"

@@ -1,0 +1,35 @@
+# nss-daemon configuration
+
+daemon:
+  socket_path: "/tmp/nss-daemon-test/nss-daemon.sock"
+  broadcast_interval: 30s
+  record_ttl: 3600s
+  pid_file: "/var/run/nss-daemon.pid"
+
+network:
+  interfaces: ["eth0", "wlan0"]
+  broadcast_addr: "255.255.255.255:5354"
+  max_broadcast_rate: 10
+
+discovery:
+  enabled: true
+  detect_services: true
+  service_port_mapping:
+    www: [80, 443]
+    smtp: [25, 587]
+    mail: [143, 993]
+    xmpp: [5222, 5269]
+    ssh: [22]
+    ftp: [21]
+  scan_interval: 60s
+
+security:
+  enabled: false
+  key_path: "/etc/nss-daemon/keys.json"
+  trusted_peers: "/etc/nss-daemon/trusted_peers.json"
+  require_signed: false
+
+logging:
+  level: "info"
+  format: "text"
+  file: ""

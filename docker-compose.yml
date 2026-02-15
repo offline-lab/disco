@@ -1,0 +1,66 @@
+version: "3.8"
+
+networks:
+  testnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+services:
+  node1:
+    build: .
+    hostname: node1
+    container_name: nss-node1
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      testnet:
+        ipv4_address: 172.28.0.10
+    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  node2:
+    build: .
+    hostname: node2
+    container_name: nss-node2
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      testnet:
+        ipv4_address: 172.28.0.11
+    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    depends_on:
+      node1:
+        condition: service_healthy
+
+  node3:
+    build: .
+    hostname: node3
+    container_name: nss-node3
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      testnet:
+        ipv4_address: 172.28.0.12
+    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    depends_on:
+      node2:
+        condition: service_healthy

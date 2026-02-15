@@ -1,0 +1,34 @@
+[Unit]
+Description=NSS Daemon - Name Service Switch for offline networks
+After=network.target
+Documentation=https://github.com/flip/nss-daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nss-daemon -config /etc/nss-daemon/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+User=nss-daemon
+Group=nss-daemon
+
+RuntimeDirectory=nss-daemon
+RuntimeDirectoryMode=0750
+
+ConfigurationDirectory=nss-daemon
+ConfigurationDirectoryMode=0750
+
+StateDirectory=nss-daemon
+StateDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/nss-daemon.sock /var/lib/nss-daemon
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
