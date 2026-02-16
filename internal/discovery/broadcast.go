@@ -3,7 +3,6 @@ package discovery
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -297,26 +296,21 @@ func (l *Listener) Start(stopChan chan struct{}) {
 					return
 				default:
 					c.SetReadDeadline(time.Now().Add(1 * time.Second))
-					n, addr, err := c.ReadFromUDP(buf)
+					n, _, err := c.ReadFromUDP(buf)
 					if err != nil {
 						continue
 					}
 
 					var msg BroadcastMessage
 					if err := json.Unmarshal(buf[:n], &msg); err != nil {
-						log.Printf("Listener: failed to parse message from %s: %v", addr, err)
 						continue
 					}
 
-					log.Printf("Listener: received message from %s, hostname=%s, type=%s", addr, msg.Hostname, msg.Type)
-
 					if l.duplicateFilter.Seen(msg.MessageID) {
-						log.Printf("Listener: duplicate message %s", msg.MessageID)
 						continue
 					}
 
 					if l.requireSigned && msg.Signature == nil {
-						log.Printf("Listener: unsigned message rejected")
 						continue
 					}
 
@@ -332,15 +326,12 @@ func (l *Listener) Start(stopChan chan struct{}) {
 						}
 						sigData, _ := json.Marshal(msgWithoutSig)
 						if !l.keyManager.Verify(sigData, msg.Signature) {
-							log.Printf("Listener: signature verification failed")
 							continue
 						}
 					}
 
-					log.Printf("Listener: sending message to channel, hostname=%s", msg.Hostname)
 					select {
 					case l.messageChan <- &msg:
-						log.Printf("Listener: message sent to channel successfully")
 					case <-stopChan:
 						return
 					}

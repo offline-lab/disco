@@ -1,7 +1,7 @@
 [Unit]
 Description=NSS Daemon - Name Service Switch for offline networks
 After=network.target
-Documentation=https://github.com/flip/nss-daemon
+Documentation=https://github.com/offline-lab/disco
 
 [Service]
 Type=simple
@@ -21,11 +21,15 @@ ConfigurationDirectoryMode=0750
 StateDirectory=nss-daemon
 StateDirectoryMode=0750
 
+# Network capabilities for UDP broadcast
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_RAW CAP_NET_BIND_SERVICE
+
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/nss-daemon.sock /var/lib/nss-daemon
+ReadWritePaths=/run/nss-daemon /var/lib/nss-daemon
 
 StandardOutput=journal
 StandardError=journal

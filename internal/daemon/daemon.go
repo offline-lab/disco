@@ -157,7 +157,6 @@ func (d *Daemon) processDiscoveryMessages() {
 
 // handleDiscoveryMessage processes a discovery message
 func (d *Daemon) handleDiscoveryMessage(msg *discovery.BroadcastMessage) {
-	log.Printf("handleDiscoveryMessage: received message for hostname=%s, ips=%v", msg.Hostname, msg.IPs)
 	record := &nss.Record{
 		Hostname:  msg.Hostname,
 		Addresses: msg.IPs,
@@ -171,7 +170,6 @@ func (d *Daemon) handleDiscoveryMessage(msg *discovery.BroadcastMessage) {
 	}
 
 	d.store.AddOrUpdate(record)
-	log.Printf("handleDiscoveryMessage: added record for %s", msg.Hostname)
 }
 
 // updateServiceAnnouncements updates the announcer with detected services

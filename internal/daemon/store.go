@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -97,16 +96,12 @@ func (rs *RecordStore) List() []*nss.Record {
 	var records []*nss.Record
 	now := time.Now().Unix()
 
-	log.Printf("List: total records in map: %d", len(rs.records))
 	for _, record := range rs.records {
-		log.Printf("List: record %s, timestamp=%d, ttl=%d, now=%d, expired=%v",
-			record.Hostname, record.Timestamp, record.TTL, now, now > (record.Timestamp+record.TTL))
 		if now > (record.Timestamp + record.TTL) {
 			continue
 		}
 		records = append(records, record)
 	}
-	log.Printf("List: returning %d valid records", len(records))
 
 	return records
 }

@@ -7,7 +7,9 @@ nss-config-validate
 nss-ping
 nss-dns
 nss-announce
-ping
+
+# Build directory
+build/
 
 # NSS Module
 libnss_daemon.so.2
@@ -17,6 +19,7 @@ libnss_daemon.so
 test-keys.json
 *.log
 test-logs/
+*.bak
 
 # Editor files
 *.swp

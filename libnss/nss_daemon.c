@@ -458,9 +458,13 @@ enum nss_status _nss_daemon_gethostbyname2_r(const char *name,
 
     if (fill_hostent(ret, name, addrs, num_addrs, af, buffer, buflen) < 0) {
         free_addrs(addrs, num_addrs);
-        *errnop = ERANGE;
-        *h_errnop = NETDB_INTERNAL;
-        return NSS_STATUS_TRYAGAIN;
+        /* 
+         * Return NOTFOUND if no addresses for this family,
+         * TRYAGAIN only for actual buffer overflow
+         */
+        *errnop = ENOENT;
+        *h_errnop = HOST_NOT_FOUND;
+        return NSS_STATUS_NOTFOUND;
     }
 
     free_addrs(addrs, num_addrs);
@@ -580,9 +584,9 @@ enum nss_status _nss_daemon_gethostbyaddr_r(const void *addr,
 
     if (fill_hostent(ret, hostname, addrs, num_addrs, af, buffer, buflen) < 0) {
         free_addrs(addrs, num_addrs);
-        *errnop = ERANGE;
-        *h_errnop = NETDB_INTERNAL;
-        return NSS_STATUS_TRYAGAIN;
+        *errnop = ENOENT;
+        *h_errnop = HOST_NOT_FOUND;
+        return NSS_STATUS_NOTFOUND;
     }
 
     /* Don't free addrs here - fill_hostent already freed them or needs them */
