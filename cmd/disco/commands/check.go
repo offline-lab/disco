@@ -131,7 +131,7 @@ func checkService(check *ServiceCheck) ServiceCheck {
 		check.Reachable = false
 		check.Error = err
 	} else {
-		conn.Close()
+		_ = conn.Close()
 		check.Reachable = true
 	}
 

@@ -20,7 +20,7 @@ func TestSetup(t *testing.T) {
 
 func TestSetup_WithFile(t *testing.T) {
 	tmpFile := "/tmp/disco-test.log"
-	defer os.Remove(tmpFile)
+	defer os.Remove(tmpFile) //nolint:errcheck
 
 	cfg := Config{
 		Level:  DEBUG,
@@ -84,18 +84,26 @@ func TestLogLevel_Unknown(t *testing.T) {
 }
 
 func TestDebug(t *testing.T) {
-	Setup(Config{Level: DEBUG, Format: "text", File: ""})
+	if err := Setup(Config{Level: DEBUG, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 	Debug("test message", map[string]interface{}{"key": "value"})
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestInfo(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 	Info("test message", map[string]interface{}{"key": "value"})
 }
 
 func TestWarn(t *testing.T) {
-	Setup(Config{Level: WARN, Format: "text", File: ""})
+	if err := Setup(Config{Level: WARN, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	Warn("test message", map[string]interface{}{"key": "value"})
 
@@ -103,7 +111,9 @@ func TestWarn(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
-	Setup(Config{Level: ERROR, Format: "text", File: ""})
+	if err := Setup(Config{Level: ERROR, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	testErr := os.ErrNotExist
 	Error("test message", testErr, map[string]interface{}{"key": "value"})
@@ -124,7 +134,9 @@ func TestFatal(t *testing.T) {
 }
 
 func TestLogLevels_Filtering(t *testing.T) {
-	Setup(Config{Level: ERROR, Format: "text", File: ""})
+	if err := Setup(Config{Level: ERROR, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	// At ERROR level, DEBUG and INFO messages should not appear
 	Debug("debug message", nil)
@@ -134,11 +146,15 @@ func TestLogLevels_Filtering(t *testing.T) {
 	Error("error message", nil, map[string]interface{}{})
 
 	// Reset to INFO for other tests
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLogLevels_All(t *testing.T) {
-	Setup(Config{Level: DEBUG, Format: "text", File: ""})
+	if err := Setup(Config{Level: DEBUG, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	// All messages should appear at DEBUG level
 	Debug("debug message", nil)
@@ -147,11 +163,15 @@ func TestLogLevels_All(t *testing.T) {
 	Error("error message", nil, nil)
 
 	// Reset to INFO for other tests
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFields(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	fields := map[string]interface{}{
 		"key1": "value1",
@@ -165,7 +185,9 @@ func TestFields(t *testing.T) {
 }
 
 func TestFields_Nil(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	Info("message with nil fields", nil)
 
@@ -173,7 +195,9 @@ func TestFields_Nil(t *testing.T) {
 }
 
 func TestFields_Empty(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	fields := map[string]interface{}{}
 	Info("message with empty fields", fields)
@@ -182,18 +206,24 @@ func TestFields_Empty(t *testing.T) {
 }
 
 func TestJSONFormat(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "json", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "json", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	Info("json test message", map[string]interface{}{"key": "value"})
 
 	// We can't easily verify JSON output without capturing stdout
 	// Just ensure it doesn't panic
 
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestTextFormat(t *testing.T) {
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 
 	Info("text test message", map[string]interface{}{"key": "value"})
 
@@ -216,7 +246,7 @@ func TestConfig_Defaults(t *testing.T) {
 
 func TestConfig_FilePath(t *testing.T) {
 	tmpFile := "/tmp/disco-test-file.log"
-	defer os.Remove(tmpFile)
+	defer os.Remove(tmpFile) //nolint:errcheck
 
 	cfg := Config{
 		Level:  DEBUG,
@@ -246,7 +276,9 @@ func TestMultipleSetup(t *testing.T) {
 		t.Errorf("Setup() errors = %v, %v", err1, err2)
 	}
 
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFormatMessage(t *testing.T) {

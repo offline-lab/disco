@@ -170,8 +170,8 @@ func TestIsTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	defer os.Remove(f.Name())
+	defer func() { _ = f.Close() }()
+	_ = os.Remove(f.Name())
 
 	if IsTerminal(f) {
 		t.Error("Regular file should not be detected as terminal")

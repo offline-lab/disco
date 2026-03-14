@@ -271,7 +271,7 @@ func (d *Daemon) waitForShutdown() {
 		d.store.Stop()
 	}
 
-	os.Remove(d.config.Daemon.SocketPath)
+	_ = os.Remove(d.config.Daemon.SocketPath)
 
 	logging.Info("Shutdown complete", nil)
 }

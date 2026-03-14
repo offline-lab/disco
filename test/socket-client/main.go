@@ -47,18 +47,18 @@ func main() {
 		data, _ := json.Marshal(tc.query)
 		if _, err := conn.Write(data); err != nil {
 			fmt.Printf("   %s: FAIL (write: %v)\n", tc.name, err)
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 			fmt.Printf("   %s: FAIL (deadline: %v)\n", tc.name, err)
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 
 		buf := make([]byte, 4096)
 		n, err := conn.Read(buf)
-		conn.Close()
+		_ = conn.Close()
 
 		if err != nil {
 			fmt.Printf("   %s: FAIL (%v)\n", tc.name, err)

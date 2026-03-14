@@ -16,9 +16,6 @@ func TestRecordStore_Stop(t *testing.T) {
 	store := NewRecordStore(time.Hour, healthCfg, nil)
 
 	store.Stop()
-
-	store.mu.Lock()
-	store.mu.Unlock()
 }
 
 func TestRecordStore_ListAll(t *testing.T) {

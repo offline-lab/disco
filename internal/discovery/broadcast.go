@@ -323,7 +323,7 @@ func (a *Announcer) RemoveService(name string) {
 }
 
 func (a *Announcer) Stop() {
-	a.conn.Close()
+	_ = a.conn.Close()
 }
 
 func NewListener(broadcastAddr string, keyManager *security.KeyManager, requireSigned bool) (*Listener, error) {
@@ -369,7 +369,7 @@ func (l *Listener) Start(stopChan chan struct{}) {
 		go func(c *net.UDPConn) {
 			defer wg.Done()
 			buf := l.bufPool.Get().([]byte)
-			defer l.bufPool.Put(buf)
+			defer l.bufPool.Put(&buf)
 
 			for {
 				select {
@@ -498,6 +498,6 @@ func (l *Listener) Stop() {
 	close(l.messageChan)
 	close(l.timeMessageChan)
 	for _, conn := range l.conns {
-		conn.Close()
+		_ = conn.Close()
 	}
 }

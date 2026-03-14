@@ -37,14 +37,14 @@ func TestDaemonClient_Connect_MissingSocket(t *testing.T) {
 
 func TestDaemonClient_GetTimeStatus(t *testing.T) {
 	socketPath := "/tmp/disco-client-test-" + time.Now().Format("20060102150405") + ".sock"
-	os.Remove(socketPath)
+	_ = os.Remove(socketPath)
 
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatalf("failed to create socket: %v", err)
 	}
-	defer listener.Close()
-	defer os.Remove(socketPath)
+	defer func() { _ = listener.Close() }()
+	defer os.Remove(socketPath) //nolint:errcheck
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -55,7 +55,7 @@ func TestDaemonClient_GetTimeStatus(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req map[string]interface{}
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {
@@ -92,14 +92,14 @@ func TestDaemonClient_GetTimeStatus(t *testing.T) {
 
 func TestDaemonClient_ForceTimeUpdate(t *testing.T) {
 	socketPath := "/tmp/disco-client-test-force-" + time.Now().Format("20060102150405") + ".sock"
-	os.Remove(socketPath)
+	_ = os.Remove(socketPath)
 
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatalf("failed to create socket: %v", err)
 	}
-	defer listener.Close()
-	defer os.Remove(socketPath)
+	defer func() { _ = listener.Close() }()
+	defer os.Remove(socketPath) //nolint:errcheck
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -110,7 +110,7 @@ func TestDaemonClient_ForceTimeUpdate(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req map[string]interface{}
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {

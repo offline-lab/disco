@@ -146,7 +146,7 @@ func forgetHost(cmd *cobra.Command, args []string) {
 	})
 	checkError(err)
 
-	response, err = cli.HandleResponse(response, err)
+	_, err = cli.HandleResponse(response, err)
 	checkError(err)
 
 	fmt.Printf("Host forgotten: %s\n", hostname)
@@ -167,7 +167,7 @@ func markLostHost(cmd *cobra.Command, args []string) {
 	})
 	checkError(err)
 
-	response, err = cli.HandleResponse(response, err)
+	_, err = cli.HandleResponse(response, err)
 	checkError(err)
 
 	fmt.Printf("Host marked as lost: %s\n", hostname)

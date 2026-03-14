@@ -292,7 +292,7 @@ logging:
   format: json
 `
 	tmpFile := "/tmp/test-config.yaml"
-	defer os.Remove(tmpFile)
+	defer os.Remove(tmpFile) //nolint:errcheck
 
 	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
@@ -330,7 +330,7 @@ daemon:
   socket_path: [invalid yaml
 `
 	tmpFile := "/tmp/test-invalid.yaml"
-	defer os.Remove(tmpFile)
+	defer os.Remove(tmpFile) //nolint:errcheck
 
 	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)

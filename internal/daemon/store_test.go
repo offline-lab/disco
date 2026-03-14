@@ -154,7 +154,7 @@ func TestRecordStore_GetByAddr(t *testing.T) {
 	}
 
 	// Test with second address
-	retrieved, exists = store.GetByAddr("192.168.1.11")
+	_, exists = store.GetByAddr("192.168.1.11")
 	if !exists {
 		t.Fatal("Record not found by address 192.168.1.11")
 	}

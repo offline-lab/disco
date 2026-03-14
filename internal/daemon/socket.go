@@ -40,7 +40,7 @@ func (s *SocketServer) SetTimeSync(ts *timesync.TimeSyncService) {
 }
 
 func (s *SocketServer) Start() error {
-	os.Remove(s.socketPath)
+	_ = os.Remove(s.socketPath)
 
 	ln, err := net.Listen("unix", s.socketPath)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *SocketServer) Start() error {
 				s.wg.Add(1)
 				go s.handleConnection(conn)
 			default:
-				conn.Close()
+				_ = conn.Close()
 			}
 		}
 	}
@@ -87,14 +87,14 @@ func (s *SocketServer) Start() error {
 func (s *SocketServer) Stop() {
 	close(s.stopChan)
 	if s.listener != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 	}
 	s.wg.Wait()
 }
 
 func (s *SocketServer) handleConnection(conn net.Conn) {
 	defer func() {
-		conn.Close()
+		_ = conn.Close()
 		<-s.connSemaphore
 		s.wg.Done()
 	}()
@@ -253,7 +253,7 @@ func (s *SocketServer) handleHostsShow(query *nss.Query) *nss.Response {
 			if r.IsStatic {
 				lastSeenAgo = "(static)"
 			} else {
-				ago := time.Now().Sub(time.Unix(r.Timestamp, 0))
+				ago := time.Since(time.Unix(r.Timestamp, 0))
 				lastSeenAgo = formatDuration(ago)
 			}
 

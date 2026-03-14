@@ -59,14 +59,7 @@ func (b *BackoffManager) NextInterval(hasFix bool, sats int) time.Duration {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	signalImproved := false
-
-	if hasFix && !b.lastHasFix {
-		signalImproved = true
-	}
-	if sats > b.lastSats+2 && sats > 0 {
-		signalImproved = true
-	}
+	signalImproved := (hasFix && !b.lastHasFix) || (sats > b.lastSats+2 && sats > 0)
 
 	b.lastHasFix = hasFix
 	b.lastSats = sats
@@ -141,7 +134,7 @@ func (g *GPSReader) Open() error {
 
 func (g *GPSReader) Close() {
 	if g.serial != nil {
-		g.serial.Close()
+		_ = g.serial.Close()
 	}
 }
 
@@ -377,7 +370,7 @@ func (b *Broadcaster) broadcastToInterfaces(data []byte) {
 
 func (b *Broadcaster) Close() {
 	if b.conn != nil {
-		b.conn.Close()
+		_ = b.conn.Close()
 	}
 }
 
