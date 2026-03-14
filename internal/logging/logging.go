@@ -46,7 +46,6 @@ type Config struct {
 
 var (
 	currentLevel = INFO
-	logger       *log.Logger
 	jsonLog      *jsonLogger
 )
 
@@ -91,9 +90,6 @@ func Setup(cfg Config) error {
 		jsonLog = &jsonLogger{
 			logger: log.New(output, "", 0),
 		}
-	} else {
-		flags := log.LstdFlags
-		logger = log.New(output, "", flags)
 	}
 
 	return nil

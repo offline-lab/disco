@@ -126,8 +126,7 @@ func TestRecordStore_ListEmpty(t *testing.T) {
 	store := newTestStore(3600 * time.Second)
 
 	all := store.List()
-	// List returns nil for empty, which is acceptable
-	if all != nil && len(all) != 0 {
+	if len(all) != 0 {
 		t.Errorf("Expected 0 records, got %d", len(all))
 	}
 }

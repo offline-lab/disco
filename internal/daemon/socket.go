@@ -62,7 +62,9 @@ func (s *SocketServer) Start() error {
 		case <-s.stopChan:
 			return nil
 		default:
-			ln.(*net.UnixListener).SetDeadline(time.Now().Add(100 * time.Millisecond))
+			if err := ln.(*net.UnixListener).SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+				continue
+			}
 			conn, err := ln.Accept()
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
@@ -106,7 +108,9 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 	}
 
 	response := s.handleQuery(&query)
-	encoder.Encode(response)
+	if err := encoder.Encode(response); err != nil {
+		logging.Debug("Failed to encode response", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 func (s *SocketServer) handleQuery(query *nss.Query) *nss.Response {
@@ -458,7 +462,9 @@ func (s *SocketServer) handleQueryListServices(query *nss.Query) *nss.Response {
 		for svcName, svcAddr := range r.Services {
 			var addr string
 			var port int
-			fmt.Sscanf(svcAddr, "%s:%d", &addr, &port)
+			if _, err := fmt.Sscanf(svcAddr, "%s:%d", &addr, &port); err != nil {
+				continue
+			}
 
 			services[svcName] = append(services[svcName], serviceHost{
 				Hostname: r.Hostname,
