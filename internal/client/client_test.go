@@ -69,7 +69,9 @@ func TestDaemonClient_GetTimeStatus(t *testing.T) {
 			"last_offset":    0.001,
 			"last_sync_time": "2024-01-01T00:00:00Z",
 		}
-		json.NewEncoder(conn).Encode(resp)
+		if err := json.NewEncoder(conn).Encode(resp); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	}()
 
 	client := NewDaemonClient(socketPath)
@@ -122,7 +124,9 @@ func TestDaemonClient_ForceTimeUpdate(t *testing.T) {
 			"method":       "step",
 			"source_count": 2,
 		}
-		json.NewEncoder(conn).Encode(resp)
+		if err := json.NewEncoder(conn).Encode(resp); err != nil {
+			return
+		}
 	}()
 
 	client := NewDaemonClient(socketPath)

@@ -106,7 +106,14 @@ func executePings() (successful int, latencies []time.Duration) {
 			continue
 		}
 
-		conn.SetDeadline(deadline)
+		if err := conn.SetDeadline(deadline); err != nil {
+			if pingVerbose {
+				cli.PrintError("[%d] ERROR: %v\n", i+1, err)
+			}
+			conn.Close()
+			time.Sleep(pingInterval)
+			continue
+		}
 		buf := make([]byte, 1024)
 		_, err = conn.Read(buf)
 		conn.Close()

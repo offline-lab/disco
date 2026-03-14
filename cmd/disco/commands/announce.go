@@ -43,7 +43,9 @@ func init() {
 	announceCmd.Flags().IntVarP(&announcePort, "port", "p", 0, "Service port (requires --service)")
 	announceCmd.Flags().StringVarP(&announceService, "service", "S", "", "Service name to announce")
 
-	announceCmd.MarkFlagRequired("hostname")
+	if err := announceCmd.MarkFlagRequired("hostname"); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to mark hostname flag as required: %v\n", err)
+	}
 }
 
 func runAnnounce(cmd *cobra.Command, args []string) error {

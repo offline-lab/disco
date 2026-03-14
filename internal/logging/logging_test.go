@@ -85,21 +85,13 @@ func TestLogLevel_Unknown(t *testing.T) {
 
 func TestDebug(t *testing.T) {
 	Setup(Config{Level: DEBUG, Format: "text", File: ""})
-
 	Debug("test message", map[string]interface{}{"key": "value"})
-
-	// We can't easily capture output in tests without mocking
-	// Just ensure it doesn't panic
-
 	Setup(Config{Level: INFO, Format: "text", File: ""})
 }
 
 func TestInfo(t *testing.T) {
 	Setup(Config{Level: INFO, Format: "text", File: ""})
-
 	Info("test message", map[string]interface{}{"key": "value"})
-
-	// Just ensure it doesn't panic
 }
 
 func TestWarn(t *testing.T) {

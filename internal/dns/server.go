@@ -82,7 +82,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	close(s.stopChan)
 	if s.server != nil {
-		s.server.Shutdown()
+		_ = s.server.Shutdown()
 	}
 }
 

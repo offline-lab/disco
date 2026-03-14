@@ -154,7 +154,9 @@ func (a *Announcer) broadcast() {
 		return
 	}
 
-	a.conn.WriteToUDP(data, a.cachedBroadcastAddr)
+	if _, err := a.conn.WriteToUDP(data, a.cachedBroadcastAddr); err != nil {
+		logging.Debug("Failed to broadcast to cached address", map[string]interface{}{"error": err.Error()})
+	}
 
 	ifaces := a.getCachedInterfaces()
 	for _, iface := range ifaces {
@@ -181,7 +183,9 @@ func (a *Announcer) broadcast() {
 					}
 					targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%s", broadcast.String(), a.cachedPort))
 					if err == nil {
-						a.conn.WriteToUDP(data, targetAddr)
+						if _, err := a.conn.WriteToUDP(data, targetAddr); err != nil {
+							logging.Debug("Failed to broadcast to interface", map[string]interface{}{"interface": iface.Name, "error": err.Error()})
+						}
 					}
 				}
 			}
@@ -372,7 +376,9 @@ func (l *Listener) Start(stopChan chan struct{}) {
 				case <-stopChan:
 					return
 				default:
-					c.SetReadDeadline(time.Now().Add(1 * time.Second))
+					if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+						continue
+					}
 					n, _, err := c.ReadFromUDP(buf)
 					if err != nil {
 						continue

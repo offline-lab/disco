@@ -167,7 +167,9 @@ func (d *Daemon) Run() error {
 		logging.Info("Time sync service started", nil)
 	}
 
-	go d.socket.Start()
+	if err := d.socket.Start(); err != nil {
+		return fmt.Errorf("failed to start socket server: %w", err)
+	}
 	logging.Info("Socket server started", map[string]interface{}{"socket_path": d.config.Daemon.SocketPath})
 
 	if d.dnsServer != nil {
