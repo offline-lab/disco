@@ -64,7 +64,6 @@ enum nss_status _nss_disco_gethostbyaddr_r(const void *addr,
 #endif // _NSS_DISCO_H
 
 static int safe_strncpy(char *dest, const char *src, size_t dest_size);
-static int safe_strncat(char *dest, const char *src, size_t dest_size);
 static int validate_hostname(const char *hostname);
 static int validate_ip(const char *ip);
 static void free_addrs(char **addrs, int count);
@@ -419,7 +418,7 @@ enum nss_status _nss_disco_gethostbyname2_r(const char *name,
              "{\"type\":\"QUERY_BY_NAME\",\"name\":\"%s\",\"family\":%d,\"request_id\":\"byname-%ld\"}",
              name, af, (long)getpid());
 
-    if (query_len < 0 || query_len >= sizeof(query)) {
+    if (query_len < 0 || (size_t)query_len >= sizeof(query)) {
         close(sockfd);
         *errnop = EMSGSIZE;
         *h_errnop = NETDB_INTERNAL;
@@ -532,7 +531,7 @@ enum nss_status _nss_disco_gethostbyaddr_r(const void *addr,
              "{\"type\":\"QUERY_BY_ADDR\",\"addr\":\"%s\",\"family\":%d,\"request_id\":\"byaddr-%ld\"}",
              addr_str, af, (long)getpid());
 
-    if (query_len < 0 || query_len >= sizeof(query)) {
+    if (query_len < 0 || (size_t)query_len >= sizeof(query)) {
         close(sockfd);
         *errnop = EMSGSIZE;
         *h_errnop = NETDB_INTERNAL;
@@ -607,26 +606,6 @@ static int safe_strncpy(char *dest, const char *src, size_t dest_size) {
     
     memcpy(dest, src, copy_len);
     dest[copy_len] = '\0';
-    
-    return 0;
-}
-
-static int safe_strncat(char *dest, const char *src, size_t dest_size) {
-    if (dest_size == 0) {
-        return -1;
-    }
-    
-    size_t dest_len = strlen(dest);
-    size_t src_len = strlen(src);
-    size_t avail = dest_size - dest_len - 1;
-    
-    if (src_len < avail) {
-        memcpy(dest + dest_len, src, src_len);
-        dest[dest_len + src_len] = '\0';
-    } else if (avail > 0) {
-        memcpy(dest + dest_len, src, avail - 1);
-        dest[dest_len + avail - 1] = '\0';
-    }
     
     return 0;
 }
