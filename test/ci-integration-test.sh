@@ -152,7 +152,7 @@ echo
 
 echo "=== Test 6: Config Validation ==="
 info "Testing config validation..."
-if "$CLI" config validate "$CONFIG" 2>&1 | grep -qi "valid\|passed"; then
+if "$CLI" config validate "$CONFIG" 2>&1 | grep -qiE "valid|ready|success"; then
     pass "Config validation passed"
 else
     fail "Config validation failed"
@@ -165,7 +165,7 @@ if [ -f /lib/x86_64-linux-gnu/libnss_disco.so.2 ]; then
     pass "NSS module installed"
 
     info "Testing NSS lookup (may fail if daemon not fully configured)..."
-    if getent hosts nonexistent-disco-host-12345 2>&1; then
+    if getent hosts nonexistent-disco-host-12345 >/dev/null 2>&1; then
         fail "NSS lookup returned success for nonexistent host"
     else
         pass "NSS lookup correctly failed for nonexistent host"
