@@ -369,7 +369,7 @@ func (l *Listener) Start(stopChan chan struct{}) {
 		go func(c *net.UDPConn) {
 			defer wg.Done()
 			buf := l.bufPool.Get().([]byte)
-			defer l.bufPool.Put(&buf)
+			defer l.bufPool.Put(buf) //nolint:staticcheck // SA6002: slice is already pointer-like, pool is fine
 
 			for {
 				select {

@@ -66,6 +66,9 @@ func TestTimeSyncService_ForceUpdate_Success(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Clock adjustment only supported on Linux")
 	}
+	if os.Getuid() != 0 {
+		t.Skip("Skipping - requires CAP_SYS_TIME capability (not available in CI)")
+	}
 
 	cfg := &config.TimeSyncConfig{
 		Enabled:         true,
@@ -117,6 +120,9 @@ func TestTimeSyncService_ForceUpdate_AllowBackward(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Clock adjustment only supported on Linux")
 	}
+	if os.Getuid() != 0 {
+		t.Skip("Skipping - requires CAP_SYS_TIME capability (not available in CI)")
+	}
 
 	cfg := &config.TimeSyncConfig{
 		Enabled:         true,
@@ -161,6 +167,9 @@ func TestTimeSyncService_ForceUpdate_AllowBackward(t *testing.T) {
 func TestTimeSyncService_ForceUpdate_UpdatesStatus(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Clock adjustment only supported on Linux")
+	}
+	if os.Getuid() != 0 {
+		t.Skip("Skipping - requires CAP_SYS_TIME capability (not available in CI)")
 	}
 
 	cfg := &config.TimeSyncConfig{
@@ -224,6 +233,9 @@ func TestTimeSyncService_ForceUpdate_Concurrent(t *testing.T) {
 func TestTimeSyncService_ForceUpdate_MinSources1(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Clock adjustment only supported on Linux")
+	}
+	if os.Getuid() != 0 {
+		t.Skip("Skipping - requires CAP_SYS_TIME capability (not available in CI)")
 	}
 
 	cfg := &config.TimeSyncConfig{
