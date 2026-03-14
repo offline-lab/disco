@@ -117,7 +117,9 @@ func TestValidateConfigPath(t *testing.T) {
 			name: "directory",
 			setup: func() string {
 				dir := filepath.Join(tmpDir, "testdir")
-				os.Mkdir(dir, 0755)
+				if err := os.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
+					return ""
+				}
 				return dir
 			},
 			wantErr: true,

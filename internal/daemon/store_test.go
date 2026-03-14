@@ -126,8 +126,7 @@ func TestRecordStore_ListEmpty(t *testing.T) {
 	store := newTestStore(3600 * time.Second)
 
 	all := store.List()
-	// List returns nil for empty, which is acceptable
-	if all != nil && len(all) != 0 {
+	if len(all) != 0 {
 		t.Errorf("Expected 0 records, got %d", len(all))
 	}
 }
@@ -155,7 +154,7 @@ func TestRecordStore_GetByAddr(t *testing.T) {
 	}
 
 	// Test with second address
-	retrieved, exists = store.GetByAddr("192.168.1.11")
+	_, exists = store.GetByAddr("192.168.1.11")
 	if !exists {
 		t.Fatal("Record not found by address 192.168.1.11")
 	}

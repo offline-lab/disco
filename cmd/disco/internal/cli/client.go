@@ -31,9 +31,11 @@ func (c *DaemonClient) Query(query *nss.Query) (*nss.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w (is disco-daemon running?)", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	conn.SetDeadline(time.Now().Add(c.timeout))
+	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
+	}
 
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)

@@ -355,9 +355,8 @@ func TestQuery_EmptyJSON(t *testing.T) {
 		t.Fatalf("UnmarshalQuery() error = %v", err)
 	}
 
-	// Empty JSON is valid, just has default values
-	if q.RequestID == "" {
-		// RequestID is set to empty string by default
+	if q.RequestID != "" {
+		t.Errorf("RequestID = %q, want empty string", q.RequestID)
 	}
 }
 

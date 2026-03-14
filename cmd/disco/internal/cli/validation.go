@@ -24,14 +24,14 @@ func ValidateHostname(hostname string) error {
 		return fmt.Errorf("hostname too long (max %d characters)", MaxHostnameLength)
 	}
 
+	labelRegex := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 	parts := strings.Split(hostname, ".")
 	for _, part := range parts {
 		if len(part) == 0 || len(part) > MaxLabelLength {
 			return fmt.Errorf("hostname label must be 1-%d characters", MaxLabelLength)
 		}
 
-		matched, _ := regexp.MatchString(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, strings.ToLower(part))
-		if !matched {
+		if !labelRegex.MatchString(strings.ToLower(part)) {
 			return fmt.Errorf("hostname contains invalid characters")
 		}
 	}

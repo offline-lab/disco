@@ -2,15 +2,26 @@
  * GPS Time Broadcaster for nss-daemon
  * 
  * Hardware:
- *   - Arduino Nano/Uno/Mega
- *   - GPS module (u-blox NEO-6M or similar) on Serial
+ *   - Arduino Nano/Uno/Mega or ESP32/ESP8266
+ *   - GPS module (GNS 701, u-blox NEO-6M, NEO-8M, or similar)
  *   - Ethernet shield (W5100/W5500) or WiFi shield
  * 
- * Wiring:
- *   GPS TX  -> Arduino RX (pin 0 or Serial1)
- *   GPS RX  -> Arduino TX (pin 1 or Serial1)
- *   GPS VCC -> 5V
- *   GPS GND -> GND
+ * GNS 701 Pinout:
+ *   Pin 1 (VCC)     -> 3.3V (or 5V with level shifter for 5V Arduinos)
+ *   Pin 2 (GND)     -> GND
+ *   Pin 3 (VBACKUP) -> 3.3V (or battery for RTC backup)
+ *   Pin 4 (TX0)     -> Arduino RX (pin 0 or Serial1)
+ *   Pin 5 (RX0)     -> Arduino TX (pin 1 or Serial1)
+ *   Pin 6 (ENABLE)  -> 3.3V or leave floating
+ *   Pin 7 (1PPS)    -> Optional: connect to PPS_PIN for precision timing
+ *   Pin 8 (3D_FIX)  -> Optional: LED indicator
+ * 
+ * NEO-6M/8M Pinout:
+ *   VCC  -> 5V or 3.3V (check module specs)
+ *   GND  -> GND
+ *   TX   -> Arduino RX (pin 0 or Serial1)
+ *   RX   -> Arduino TX (pin 1 or Serial1)
+ *   PPS  -> Optional: connect to PPS_PIN for precision timing
  * 
  * Build:
  *   Arduino IDE: Open this file and upload
@@ -19,10 +30,26 @@
 
 #include <SPI.h>
 
+// =============================================================================
+// CONFIGURATION - Edit these values for your setup
+// =============================================================================
+
 // Network configuration - choose one
 #define USE_ETHERNET 1
 // #define USE_WIFI 1
 
+// Pin configuration (adjust for your board)
+// For Arduino Uno/Nano: GPS uses Serial (pins 0/1), use SoftwareSerial for debug
+// For Arduino Mega: GPS can use Serial1/2/3, Serial for debug
+// For ESP32: GPS can use any pins via HardwareSerial
+#ifndef GPS_SERIAL
+#define GPS_SERIAL Serial
+#endif
+
+// Optional: 1PPS pin for precision timing (comment out to disable)
+// #define PPS_PIN 2
+
+// Network settings
 #if USE_ETHERNET
 #include <Ethernet.h>
 #include <EthernetUDP.h>
@@ -36,7 +63,7 @@ char pass[] = "YOUR_PASSWORD";
 WiFiUDP udp;
 #endif
 
-// Configuration
+// Time broadcast settings
 const char SOURCE_ID[] = "gps-arduino-01";
 const unsigned int BROADCAST_PORT = 5354;
 const unsigned long BROADCAST_INTERVAL = 16000;
@@ -47,12 +74,30 @@ bool hasFix = false;
 unsigned long gpsTimeSeconds = 0;
 int satellites = 0;
 
+#ifdef PPS_PIN
+// 1PPS state - for precision timing
+volatile bool ppsReceived = false;
+volatile unsigned long ppsMillis = 0;
+volatile unsigned long ppsCount = 0;
+
+void ppsInterrupt() {
+  ppsMillis = millis();
+  ppsCount++;
+  ppsReceived = true;
+}
+#endif
+
 // NMEA parsing buffer
 char nmeaBuffer[128];
 int nmeaIndex = 0;
 
 void setup() {
-  Serial.begin(9600);  // GPS serial
+  GPS_SERIAL.begin(9600);  // GPS serial
+  
+#ifdef PPS_PIN
+  pinMode(PPS_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PPS_PIN), ppsInterrupt, RISING);
+#endif
   
 #if USE_ETHERNET
   Ethernet.begin(mac);
@@ -68,8 +113,8 @@ void setup() {
 
 void loop() {
   // Read GPS data
-  while (Serial.available()) {
-    char c = Serial.read();
+  while (GPS_SERIAL.available()) {
+    char c = GPS_SERIAL.read();
     if (c == '\n') {
       nmeaBuffer[nmeaIndex] = '\0';
       parseNMEA(nmeaBuffer);
@@ -79,11 +124,23 @@ void loop() {
     }
   }
 
-  // Broadcast at interval
+#ifdef PPS_PIN
+  // Use 1PPS for more precise broadcast timing when available
+  if (ppsReceived && hasFix) {
+    ppsReceived = false;
+    // Broadcast on PPS pulse (every second) or at interval
+    if (millis() - lastBroadcast >= BROADCAST_INTERVAL) {
+      broadcastTime();
+      lastBroadcast = millis();
+    }
+  }
+#else
+  // Broadcast at interval without PPS
   if (hasFix && millis() - lastBroadcast >= BROADCAST_INTERVAL) {
     broadcastTime();
     lastBroadcast = millis();
   }
+#endif
 }
 
 void parseNMEA(char* line) {
@@ -174,9 +231,21 @@ bool isLeapYear(int year) {
 }
 
 void broadcastTime() {
-  char json[256];
+  char json[320];
   unsigned long timestamp = gpsTimeSeconds * 1000000000ULL;  // Convert to nanoseconds
   
+#ifdef PPS_PIN
+  // Include PPS count for precision timing verification
+  snprintf(json, sizeof(json),
+    "{\"type\":\"TIME_ANNOUNCE\","
+    "\"message_id\":\"%s-%lu\","
+    "\"timestamp\":%lu000000000,"
+    "\"clock_info\":{\"stratum\":1,\"precision\":-20,\"root_delay\":0.0,\"root_dispersion\":0.0001,\"reference_id\":\"GPS\",\"reference_time\":%lu000000000},"
+    "\"leap_indicator\":0,"
+    "\"source_id\":\"%s\","
+    "\"pps_count\":%lu}",
+    SOURCE_ID, millis(), gpsTimeSeconds, gpsTimeSeconds, SOURCE_ID, ppsCount);
+#else
   snprintf(json, sizeof(json),
     "{\"type\":\"TIME_ANNOUNCE\","
     "\"message_id\":\"%s-%lu\","
@@ -185,6 +254,7 @@ void broadcastTime() {
     "\"leap_indicator\":0,"
     "\"source_id\":\"%s\"}",
     SOURCE_ID, millis(), gpsTimeSeconds, gpsTimeSeconds, SOURCE_ID);
+#endif
   
 #if USE_ETHERNET
   udp.beginPacket(Ethernet.broadcastIP(), BROADCAST_PORT);

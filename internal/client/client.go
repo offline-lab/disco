@@ -45,7 +45,10 @@ func (c *DaemonClient) connect() (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
-	conn.SetDeadline(time.Now().Add(c.timeout))
+	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
+	}
 	return conn, nil
 }
 
@@ -54,7 +57,7 @@ func (c *DaemonClient) GetTimeStatus() (*TimeStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	req := map[string]interface{}{
 		"type":       "TIME_STATUS",
@@ -95,7 +98,7 @@ func (c *DaemonClient) ForceTimeUpdate(allowBackward bool) (*ForceUpdateResult, 
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	req := map[string]interface{}{
 		"type":           "TIME_FORCE_UPDATE",

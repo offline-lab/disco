@@ -81,7 +81,7 @@ func (d *Detector) checkPort(port int) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.TCPAddr)
 	ip := localAddr.IP.To4()

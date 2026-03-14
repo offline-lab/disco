@@ -2,12 +2,27 @@
 # 
 # Hardware:
 # - ESP32 or ESP8266 board
-# - GPS module (e.g., NEO-6M, NEO-8M) connected via UART
+# - GPS module (e.g., GNS 701, NEO-6M, NEO-8M) connected via UART
+#
+# GNS 701 Pinout (with optional 1PPS):
+#   Pin 1 (VCC)     -> 3.3V
+#   Pin 2 (GND)     -> GND
+#   Pin 3 (VBACKUP) -> 3.3V (or battery for RTC backup)
+#   Pin 4 (TX0)     -> GPIO16 (ESP32 RX)
+#   Pin 5 (RX0)     -> GPIO17 (ESP32 TX)
+#   Pin 6 (ENABLE)  -> 3.3V or leave floating
+#   Pin 7 (1PPS)    -> GPIO4 (optional, for precision timing)
+#   Pin 8 (3D_FIX)  -> optional LED indicator
 #
 # Installation:
 # 1. Copy this file and the gps_broadcaster.h to your ESPHome config directory
 # 2. Update wifi credentials and source_id
 # 3. Flash with: esphome run gps-broadcaster.yaml
+
+substitutions:
+  gps_rx_pin: GPIO16
+  gps_tx_pin: GPIO17
+  gps_pps_pin: GPIO4
 
 esphome:
   name: gps-broadcaster
@@ -35,8 +50,8 @@ logger:
 
 uart:
   - id: gps_uart
-    rx_pin: GPIO16
-    tx_pin: GPIO17
+    rx_pin: ${gps_rx_pin}
+    tx_pin: ${gps_tx_pin}
     baud_rate: 9600
 
 gps:
@@ -48,6 +63,19 @@ time:
     id: gps_time
     gps_id: my_gps
     timezone: "UTC"
+
+# Optional: 1PPS pin for precision timing (10ns jitter on GNS 701)
+# Uncomment the following section if you have the 1PPS pin connected
+# binary_sensor:
+#   - platform: gpio
+#     pin:
+#       number: ${gps_pps_pin}
+#       mode: INPUT_PULLUP
+#     name: "GPS 1PPS"
+#     id: gps_pps
+#     on_press:
+#       then:
+#         - logger.log: "1PPS pulse received"
 
 # Sensors for debugging
 sensor:

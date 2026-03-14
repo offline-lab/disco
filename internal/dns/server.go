@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/offline-lab/disco/internal/logging"
 )
 
 type RecordProvider interface {
@@ -82,7 +83,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	close(s.stopChan)
 	if s.server != nil {
-		s.server.Shutdown()
+		_ = s.server.Shutdown()
 	}
 }
 
@@ -108,7 +109,9 @@ func (s *Server) handleQuery(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	w.WriteMsg(m)
+	if err := w.WriteMsg(m); err != nil {
+		logging.Debug("Failed to write DNS response", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 func (s *Server) handleReverse(w dns.ResponseWriter, r *dns.Msg) {
@@ -122,7 +125,9 @@ func (s *Server) handleReverse(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	w.WriteMsg(m)
+	if err := w.WriteMsg(m); err != nil {
+		logging.Debug("Failed to write DNS response", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 func (s *Server) handleAQuery(q dns.Question, m *dns.Msg, domain string) {

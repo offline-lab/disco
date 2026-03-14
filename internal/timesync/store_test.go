@@ -136,3 +136,31 @@ func TestTimeSourceStore_Remove(t *testing.T) {
 		t.Error("expected 0 sources after remove")
 	}
 }
+
+func TestTimeSourceStore_Clear(t *testing.T) {
+	store := NewTimeSourceStore(30 * time.Second)
+
+	msg1 := &discovery.TimeAnnounceMessage{
+		Type:      discovery.MessageTimeAnnounce,
+		Timestamp: time.Now().UnixNano(),
+		SourceID:  "gps-node-1",
+		ClockInfo: discovery.ClockInfo{Stratum: 1},
+	}
+	msg2 := &discovery.TimeAnnounceMessage{
+		Type:      discovery.MessageTimeAnnounce,
+		Timestamp: time.Now().UnixNano(),
+		SourceID:  "gps-node-2",
+		ClockInfo: discovery.ClockInfo{Stratum: 1},
+	}
+
+	store.Add(msg1)
+	store.Add(msg2)
+	if store.Count() != 2 {
+		t.Fatal("expected 2 sources after add")
+	}
+
+	store.Clear()
+	if store.Count() != 0 {
+		t.Error("expected 0 sources after clear")
+	}
+}

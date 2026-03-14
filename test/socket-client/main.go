@@ -45,12 +45,20 @@ func main() {
 		}
 
 		data, _ := json.Marshal(tc.query)
-		conn.Write(data)
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if _, err := conn.Write(data); err != nil {
+			fmt.Printf("   %s: FAIL (write: %v)\n", tc.name, err)
+			_ = conn.Close()
+			continue
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			fmt.Printf("   %s: FAIL (deadline: %v)\n", tc.name, err)
+			_ = conn.Close()
+			continue
+		}
 
 		buf := make([]byte, 4096)
 		n, err := conn.Read(buf)
-		conn.Close()
+		_ = conn.Close()
 
 		if err != nil {
 			fmt.Printf("   %s: FAIL (%v)\n", tc.name, err)
@@ -58,7 +66,10 @@ func main() {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(buf[:n], &resp)
+		if err := json.Unmarshal(buf[:n], &resp); err != nil {
+			fmt.Printf("   %s: FAIL (parse: %v)\n", tc.name, err)
+			continue
+		}
 
 		if tc.check(resp) {
 			fmt.Printf("   %s: OK\n", tc.name)

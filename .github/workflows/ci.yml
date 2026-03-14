@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -71,11 +72,17 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          COMMIT=$(git rev-parse --short HEAD)
+
           mkdir -p build/bin
-          for cmd in daemon status query key config-validate ping dns announce time timeset gps-broadcaster; do
-            go build -ldflags="-s -w -X main.Version=${{ github.ref_name }} -X main.Commit=${{ github.sha }}" \
-              -o build/bin/disco-${cmd} ./cmd/${cmd}
-          done
+
+          go build -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" \
+            -o build/bin/disco-daemon ./cmd/daemon
+          go build -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" \
+            -o build/bin/disco ./cmd/disco
+          go build -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" \
+            -o build/bin/disco-gps-broadcaster ./cmd/gps-broadcaster
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -109,6 +116,37 @@ jobs:
           name: nss-module
           path: build/lib/libnss_disco.so.2
 
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build, build-nss-module]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-linux-amd64
+          path: build/bin/
+
+      - name: Download NSS module
+        uses: actions/download-artifact@v4
+        with:
+          name: nss-module
+          path: build/lib/
+
+      - name: Install NSS module
+        run: |
+          sudo cp build/lib/libnss_disco.so.2 /lib/x86_64-linux-gnu/
+          sudo ldconfig
+
+      - name: Make binaries executable
+        run: chmod +x build/bin/*
+
+      - name: Run integration tests
+        run: |
+          ./test/ci-integration-test.sh
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -125,3 +163,23 @@ jobs:
           context: .
           push: false
           tags: disco-daemon:${{ github.sha }}
+
+  multi-node-test:
+    name: Multi-Node Integration
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-linux-amd64
+          path: build/bin/
+
+      - name: Make binaries executable
+        run: chmod +x build/bin/*
+
+      - name: Run multi-node integration tests
+        run: |
+          ./test/ci-multi-node-test.sh
