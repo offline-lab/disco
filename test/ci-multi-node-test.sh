@@ -126,7 +126,7 @@ for node in $NODE1 $NODE2 $NODE3; do
     docker exec $node bash -c "mkdir -p /etc/disco /run && cat > /etc/disco/config.yaml << EOF
 daemon:
   socket_path: /run/disco.sock
-  broadcast_interval: 2s
+  broadcast_interval: 5s
   record_ttl: 60s
 
 network:
@@ -157,7 +157,7 @@ echo
 
 info "Starting daemons..."
 for node in $NODE1 $NODE2 $NODE3; do
-    docker exec $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml 2>&1 &
+    docker exec -d $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml
 done
 sleep 3
 pass "Daemons started"
@@ -169,7 +169,7 @@ for node in $NODE1 $NODE2 $NODE3; do
         pass "$node daemon running"
     else
         warn "$node daemon NOT running - debugging..."
-        docker exec $node cat /etc/disco/config.yaml 2>/dev/null | head -20 || warn "Config not found"
+        docker exec $node cat /etc/disco/config.yaml 2>/dev/null || warn "Config not found"
         docker exec $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml 2>&1 || true
         fail "$node daemon NOT running"
     fi
