@@ -156,10 +156,10 @@ if [ ! -f "$CONFIG" ]; then
     fail "Config file not found: $CONFIG"
 else
     VALIDATE_OUTPUT=$("$CLI" config validate "$CONFIG" 2>&1) || VALIDATE_EXIT=$?
-    echo "$VALIDATE_OUTPUT"
-    if [ "${VALIDATE_EXIT:-0}" -eq 0 ] && echo "$VALIDATE_OUTPUT" | grep -qiE "valid|ready|success|passed|✅"; then
+    if [ "${VALIDATE_EXIT:-0}" -eq 0 ] && echo "$VALIDATE_OUTPUT" | grep -qi "valid"; then
         pass "Config validation passed"
     else
+        echo "$VALIDATE_OUTPUT"
         fail "Config validation failed (exit: ${VALIDATE_EXIT:-0})"
     fi
 fi
