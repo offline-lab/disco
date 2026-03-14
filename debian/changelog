@@ -1,0 +1,15 @@
+disco (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Unified CLI with all management functionality
+  * Automatic node discovery via UDP broadcast
+  * Service detection and announcement
+  * Native NSS integration for Linux
+  * Optional DNS server for .disco domain
+  * GPS time synchronization support
+  * Message signing and verification
+  * Comprehensive input validation
+  * Security hardening (command injection prevention)
+  * Test coverage at 57.4%
+
+ -- Flip Hess <flip@offline-lab.org>  Sat, 01 Mar 2026 12:00:00 +0000

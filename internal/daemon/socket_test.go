@@ -4,11 +4,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/offline-lab/disco/internal/config"
 	"github.com/offline-lab/disco/internal/nss"
 )
 
+func newTestSocketStore() *RecordStore {
+	return NewRecordStore(3600*time.Second, &config.HealthConfig{
+		GracePeriod:     60 * time.Second,
+		ExpireAfter:     3600 * time.Second,
+		CleanupInterval: 30 * time.Second,
+	}, nil)
+}
+
 func TestSocketServer_handleQueryByName(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	store.AddOrUpdate(&nss.Record{
@@ -40,7 +49,7 @@ func TestSocketServer_handleQueryByName(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryByName_NotFound(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	query := &nss.Query{
@@ -57,7 +66,7 @@ func TestSocketServer_handleQueryByName_NotFound(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryByAddr(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	store.AddOrUpdate(&nss.Record{
@@ -85,7 +94,7 @@ func TestSocketServer_handleQueryByAddr(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryByAddr_NotFound(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	query := &nss.Query{
@@ -102,7 +111,7 @@ func TestSocketServer_handleQueryByAddr_NotFound(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryList(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	store.AddOrUpdate(&nss.Record{
@@ -132,7 +141,7 @@ func TestSocketServer_handleQueryList(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryListHosts(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	store.AddOrUpdate(&nss.Record{
@@ -158,7 +167,7 @@ func TestSocketServer_handleQueryListHosts(t *testing.T) {
 }
 
 func TestSocketServer_handleQueryListServices(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	store.AddOrUpdate(&nss.Record{
@@ -185,7 +194,7 @@ func TestSocketServer_handleQueryListServices(t *testing.T) {
 }
 
 func TestSocketServer_handleQuery_UnknownType(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)
 
 	query := &nss.Query{

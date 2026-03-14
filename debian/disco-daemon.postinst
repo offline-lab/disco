@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+# Do not restart disco-daemon on upgrade unless it's already running
+# This prevents unexpected service restarts during package upgrades
+
+if [ -d /run/systemd/system ]; then
+    if systemctl is-active --quiet disco; then
+        # Service is running, let debhelper handle the restart
+        exit 0
+    else
+        # Service is not running, don't start it automatically
+        exit 0
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0

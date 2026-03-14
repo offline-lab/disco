@@ -1,0 +1,54 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create disco user and group if they don't exist
+        if ! getent passwd disco > /dev/null; then
+            adduser --system --group --home /var/lib/disco \
+                    --gecos "Disco daemon" --shell /bin/false disco
+        fi
+
+        # Create required directories
+        mkdir -p /var/lib/disco
+        mkdir -p /run/disco
+        chown disco:disco /var/lib/disco
+        chown disco:disco /run/disco
+
+        # Install default config if not present
+        if [ ! -f /etc/disco/config.yaml ]; then
+            cp /etc/disco/config.yaml.example /etc/disco/config.yaml
+            chmod 640 /etc/disco/config.yaml
+            chown root:disco /etc/disco/config.yaml
+        fi
+
+        # Update ldconfig for NSS module
+        ldconfig
+
+        # Remind user to configure nsswitch.conf
+        if ! grep -q "disco" /etc/nsswitch.conf; then
+            echo ""
+            echo "Disco daemon has been installed."
+            echo ""
+            echo "To enable name resolution, add 'disco' to /etc/nsswitch.conf:"
+            echo "  hosts: files disco dns"
+            echo ""
+            echo "Then start the daemon:"
+            echo "  systemctl enable disco"
+            echo "  systemctl start disco"
+            echo ""
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

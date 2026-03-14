@@ -11,16 +11,16 @@ services:
   node1:
     build: .
     hostname: node1
-    container_name: nss-node1
+    container_name: disco-node1
     cap_add:
       - NET_ADMIN
       - NET_RAW
     networks:
       testnet:
         ipv4_address: 172.28.0.10
-    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    command: sh -c "./disco-daemon -config /etc/disco/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
     healthcheck:
-      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      test: ["CMD", "test", "-S", "/run/disco.sock"]
       interval: 5s
       timeout: 2s
       retries: 10
@@ -28,16 +28,16 @@ services:
   node2:
     build: .
     hostname: node2
-    container_name: nss-node2
+    container_name: disco-node2
     cap_add:
       - NET_ADMIN
       - NET_RAW
     networks:
       testnet:
         ipv4_address: 172.28.0.11
-    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    command: sh -c "./disco-daemon -config /etc/disco/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
     healthcheck:
-      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      test: ["CMD", "test", "-S", "/run/disco.sock"]
       interval: 5s
       timeout: 2s
       retries: 10
@@ -48,16 +48,16 @@ services:
   node3:
     build: .
     hostname: node3
-    container_name: nss-node3
+    container_name: disco-node3
     cap_add:
       - NET_ADMIN
       - NET_RAW
     networks:
       testnet:
         ipv4_address: 172.28.0.12
-    command: sh -c "./nss-daemon -config /etc/nss-daemon/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
+    command: sh -c "./disco-daemon -config /etc/disco/config.yaml 2>&1 & sleep 2 && exec tail -f /dev/null"
     healthcheck:
-      test: ["CMD", "test", "-S", "/run/nss-daemon.sock"]
+      test: ["CMD", "test", "-S", "/run/disco.sock"]
       interval: 5s
       timeout: 2s
       retries: 10

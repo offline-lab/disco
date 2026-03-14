@@ -3,7 +3,6 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,12 +10,14 @@ import (
 
 	"github.com/offline-lab/disco/internal/config"
 	"github.com/offline-lab/disco/internal/discovery"
+	dnsserver "github.com/offline-lab/disco/internal/dns"
+	"github.com/offline-lab/disco/internal/logging"
 	"github.com/offline-lab/disco/internal/nss"
 	"github.com/offline-lab/disco/internal/security"
 	"github.com/offline-lab/disco/internal/service"
+	"github.com/offline-lab/disco/internal/timesync"
 )
 
-// Daemon is not main daemon struct
 type Daemon struct {
 	config    *config.Config
 	store     *RecordStore
@@ -24,6 +25,8 @@ type Daemon struct {
 	announcer *discovery.Announcer
 	listener  *discovery.Listener
 	detector  *service.Detector
+	timeSync  *timesync.TimeSyncService
+	dnsServer *dnsserver.Server
 	stopChan  chan struct{}
 }
 
@@ -34,7 +37,7 @@ func New(cfg *config.Config) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	store := NewRecordStore(cfg.Daemon.RecordTTL)
+	store := NewRecordStore(cfg.Daemon.RecordTTL, &cfg.Health, cfg.StaticHosts)
 	socket := NewSocketServer(cfg.Daemon.SocketPath, store)
 
 	var keyManager *security.KeyManager
@@ -63,6 +66,7 @@ func New(cfg *config.Config) (*Daemon, error) {
 			hostname,
 			cfg.Daemon.BroadcastInterval,
 			keyManager,
+			cfg.Network.Interfaces,
 		)
 		if err != nil {
 			return nil, err
@@ -84,6 +88,23 @@ func New(cfg *config.Config) (*Daemon, error) {
 		}
 	}
 
+	if cfg.TimeSync.Enabled {
+		d.timeSync = timesync.NewTimeSyncService(&cfg.TimeSync, keyManager)
+		d.socket.SetTimeSync(d.timeSync)
+	}
+
+	if cfg.DNS.Enabled {
+		dnsConfig := &dnsserver.Config{
+			Enabled:       cfg.DNS.Enabled,
+			Port:          cfg.DNS.Port,
+			Domain:        cfg.DNS.Domain,
+			BindAddresses: cfg.DNS.BindAddresses,
+			TTLHealthy:    cfg.DNS.TTLHealthy,
+			TTLStale:      cfg.DNS.TTLStale,
+		}
+		d.dnsServer = dnsserver.NewServer(dnsConfig, d.store)
+	}
+
 	return d, nil
 }
 
@@ -93,7 +114,7 @@ func loadTrustedPeers(km *security.KeyManager, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Trusted peers file not found: %s (using self only)", path)
+			logging.Warn("Trusted peers file not found, using self only", map[string]interface{}{"path": path})
 			return nil
 		}
 		return fmt.Errorf("failed to read trusted peers file: %w", err)
@@ -112,7 +133,7 @@ func loadTrustedPeers(km *security.KeyManager, path string) error {
 	for _, peer := range peers {
 		if peer.Hostname != "" && peer.PublicKey != "" && peer.PrivateKey != "" {
 			km.AddTrustedPeerByID(peer.PublicKey, peer.PrivateKey)
-			log.Printf("Added trusted peer: %s", peer.Hostname)
+			logging.Info("Added trusted peer", map[string]interface{}{"hostname": peer.Hostname})
 		}
 	}
 
@@ -121,27 +142,45 @@ func loadTrustedPeers(km *security.KeyManager, path string) error {
 
 // Run starts daemon
 func (d *Daemon) Run() error {
-	log.Printf("Starting nss-daemon...")
+	logging.Info("Starting disco-daemon", nil)
 
 	if d.announcer != nil {
 		go d.announcer.Start(d.stopChan)
-		log.Printf("Announcer started")
+		logging.Info("Announcer started", nil)
 	}
 
 	if d.listener != nil {
 		go d.listener.Start(d.stopChan)
 		go d.processDiscoveryMessages()
-		log.Printf("Listener started")
+		logging.Info("Listener started", nil)
 	}
 
 	if d.detector != nil {
 		go d.detector.Start(d.stopChan)
 		go d.updateServiceAnnouncements(d.stopChan)
-		log.Printf("Service detector started")
+		logging.Info("Service detector started", nil)
+	}
+
+	if d.timeSync != nil {
+		go d.timeSync.Start()
+		go d.processTimeMessages()
+		logging.Info("Time sync service started", nil)
 	}
 
 	go d.socket.Start()
-	log.Printf("Socket server started on %s", d.config.Daemon.SocketPath)
+	logging.Info("Socket server started", map[string]interface{}{"socket_path": d.config.Daemon.SocketPath})
+
+	if d.dnsServer != nil {
+		if err := d.dnsServer.Start(); err != nil {
+			logging.Error("Failed to start DNS server", err, nil)
+		} else {
+			logging.Info("DNS server started", map[string]interface{}{
+				"port":   d.config.DNS.Port,
+				"domain": d.config.DNS.Domain,
+				"bind":   d.config.DNS.BindAddresses,
+			})
+		}
+	}
 
 	d.waitForShutdown()
 
@@ -152,6 +191,13 @@ func (d *Daemon) Run() error {
 func (d *Daemon) processDiscoveryMessages() {
 	for msg := range d.listener.Messages() {
 		d.handleDiscoveryMessage(msg)
+	}
+}
+
+// processTimeMessages handles incoming time messages
+func (d *Daemon) processTimeMessages() {
+	for msg := range d.listener.TimeMessages() {
+		d.timeSync.ProcessMessage(msg)
 	}
 }
 
@@ -180,7 +226,7 @@ func (d *Daemon) updateServiceAnnouncements(stopChan chan struct{}) {
 	for {
 		select {
 		case <-stopChan:
-			log.Printf("Service announcement updater stopped")
+			logging.Info("Service announcement updater stopped", nil)
 			return
 		case <-ticker.C:
 			services := d.detector.GetServices()
@@ -197,7 +243,7 @@ func (d *Daemon) waitForShutdown() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	sig := <-sigChan
-	log.Printf("Received signal %v, shutting down...", sig)
+	logging.Info("Received signal, shutting down", map[string]interface{}{"signal": sig.String()})
 
 	close(d.stopChan)
 
@@ -210,8 +256,14 @@ func (d *Daemon) waitForShutdown() {
 	if d.detector != nil {
 		d.detector.Stop()
 	}
+	if d.timeSync != nil {
+		d.timeSync.Stop()
+	}
 	if d.socket != nil {
 		d.socket.Stop()
+	}
+	if d.dnsServer != nil {
+		d.dnsServer.Stop()
 	}
 	if d.store != nil {
 		d.store.Stop()
@@ -219,5 +271,5 @@ func (d *Daemon) waitForShutdown() {
 
 	os.Remove(d.config.Daemon.SocketPath)
 
-	log.Printf("Shutdown complete")
+	logging.Info("Shutdown complete", nil)
 }

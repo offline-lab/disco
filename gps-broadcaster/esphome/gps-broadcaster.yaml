@@ -1,0 +1,85 @@
+# GPS Time Broadcaster for ESPHome
+# 
+# Hardware:
+# - ESP32 or ESP8266 board
+# - GPS module (e.g., NEO-6M, NEO-8M) connected via UART
+#
+# Installation:
+# 1. Copy this file and the gps_broadcaster.h to your ESPHome config directory
+# 2. Update wifi credentials and source_id
+# 3. Flash with: esphome run gps-broadcaster.yaml
+
+esphome:
+  name: gps-broadcaster
+  friendly_name: GPS Time Broadcaster
+  includes:
+    - gps_broadcaster.h
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# For ESP8266, uncomment this and comment out esp32 section above:
+# esp8266:
+#   board: nodemcuv2
+
+wifi:
+  ssid: "YOUR_SSID"
+  password: "YOUR_PASSWORD"
+  fast_connect: true
+
+logger:
+  level: INFO
+  baud_rate: 115200
+
+uart:
+  - id: gps_uart
+    rx_pin: GPIO16
+    tx_pin: GPIO17
+    baud_rate: 9600
+
+gps:
+  id: my_gps
+  uart_id: gps_uart
+
+time:
+  - platform: gps
+    id: gps_time
+    gps_id: my_gps
+    timezone: "UTC"
+
+# Sensors for debugging
+sensor:
+  - platform: gps
+    gps_id: my_gps
+    latitude:
+      name: "GPS Latitude"
+    longitude:
+      name: "GPS Longitude"
+    altitude:
+      name: "GPS Altitude"
+    speed:
+      name: "GPS Speed"
+    course:
+      name: "GPS Course"
+    satellites:
+      name: "GPS Satellites"
+
+text_sensor:
+  - platform: gps
+    gps_id: my_gps
+    latitude:
+      name: "GPS Latitude Text"
+    longitude:
+      name: "GPS Longitude Text"
+
+# Custom component for UDP broadcasting
+custom_component:
+  - lambda: |-
+      auto broadcaster = new GPSBroadcasterComponent();
+      broadcaster->set_source_id("gps-esphome-01");
+      broadcaster->set_interval(16000);
+      broadcaster->set_port(5354);
+      App.register_component(broadcaster);
+      return {broadcaster};

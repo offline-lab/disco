@@ -1,0 +1,40 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove)
+        # Remove disco from nsswitch.conf if present
+        if [ -f /etc/nsswitch.conf ]; then
+            sed -i '/\bdisco\b/d' /etc/nsswitch.conf
+        fi
+        ;;
+
+    purge)
+        # Remove user and group
+        if getent passwd disco > /dev/null; then
+            deluser --system disco || true
+        fi
+        if getent group disco > /dev/null; then
+            delgroup --system disco || true
+        fi
+
+        # Remove directories
+        rm -rf /var/lib/disco
+        rm -rf /run/disco
+
+        # Remove config (ask user first in future)
+        # rm -rf /etc/disco
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -9,16 +9,26 @@ import (
 type MessageType string
 
 const (
-	DefaultSocketPath = "/run/nss-daemon.sock"
+	DefaultSocketPath = "/run/disco.sock"
 
 	QueryByName       MessageType = "QUERY_BY_NAME"
 	QueryByAddr       MessageType = "QUERY_BY_ADDR"
 	QueryList         MessageType = "LIST"
 	QueryListHosts    MessageType = "LIST_HOSTS"
 	QueryListServices MessageType = "LIST_SERVICES"
-	ResponseOK        MessageType = "OK"
-	ResponseNotFound  MessageType = "NOTFOUND"
-	ResponseError     MessageType = "ERROR"
+
+	HostsList     MessageType = "HOSTS_LIST"
+	HostsShow     MessageType = "HOSTS_SHOW"
+	HostsForget   MessageType = "HOSTS_FORGET"
+	HostsMarkLost MessageType = "HOSTS_MARK_LOST"
+
+	ServicesList   MessageType = "SERVICES_LIST"
+	ServicesShow   MessageType = "SERVICES_SHOW"
+	ServicesForget MessageType = "SERVICES_FORGET"
+
+	ResponseOK       MessageType = "OK"
+	ResponseNotFound MessageType = "NOTFOUND"
+	ResponseError    MessageType = "ERROR"
 )
 
 // Query represents an NSS query from the libnss module
@@ -30,18 +40,37 @@ type Query struct {
 	RequestID string      `json:"request_id"`
 }
 
-// Response represents an NSS response from the daemon
 type Response struct {
-	Type      MessageType `json:"type"`
-	RequestID string      `json:"request_id"`
-	Name      string      `json:"name,omitempty"`
-	Aliases   []string    `json:"aliases,omitempty"`
-	AddrType  int         `json:"addr_type,omitempty"`
-	AddrLen   int         `json:"addr_len,omitempty"`
-	Addrs     []string    `json:"addrs,omitempty"`
-	Error     string      `json:"error,omitempty"`
-	Records   []byte      `json:"records,omitempty"`
-	Count     int         `json:"count,omitempty"`
+	Type      MessageType     `json:"type"`
+	RequestID string          `json:"request_id"`
+	Name      string          `json:"name,omitempty"`
+	Aliases   []string        `json:"aliases,omitempty"`
+	AddrType  int             `json:"addr_type,omitempty"`
+	AddrLen   int             `json:"addr_len,omitempty"`
+	Addrs     []string        `json:"addrs,omitempty"`
+	Error     string          `json:"error,omitempty"`
+	Records   []byte          `json:"records,omitempty"`
+	Count     int             `json:"count,omitempty"`
+	Hosts     []HostHealth    `json:"hosts,omitempty"`
+	Services  []ServiceHealth `json:"services,omitempty"`
+}
+
+type HostHealth struct {
+	Hostname    string            `json:"hostname"`
+	Addresses   []string          `json:"addresses"`
+	Status      string            `json:"status"`
+	Services    map[string]string `json:"services"`
+	LastSeen    int64             `json:"last_seen"`
+	LastSeenAgo string            `json:"last_seen_ago"`
+	IsStatic    bool              `json:"is_static"`
+}
+
+type ServiceHealth struct {
+	Name     string   `json:"name"`
+	Protocol string   `json:"protocol"`
+	Port     int      `json:"port"`
+	Hosts    []string `json:"hosts"`
+	Status   string   `json:"status"`
 }
 
 // Record represents a host record stored in the daemon
@@ -50,9 +79,21 @@ type Record struct {
 	Aliases   []string
 	Addresses []string
 	Timestamp int64
+	FirstSeen int64
 	TTL       int64
 	Services  map[string]string
+	Status    HostStatus
+	IsStatic  bool
 }
+
+type HostStatus string
+
+const (
+	StatusHealthy HostStatus = "healthy"
+	StatusStale   HostStatus = "stale"
+	StatusLost    HostStatus = "lost"
+	StatusStatic  HostStatus = "static"
+)
 
 // MarshalQuery converts a Query to JSON
 func MarshalQuery(q *Query) ([]byte, error) {

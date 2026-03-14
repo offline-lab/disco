@@ -7,29 +7,41 @@ import (
 	"time"
 )
 
-// Validate checks if the configuration is valid
-func (c *Config) Validate() error {
+type ValidationWarning struct {
+	Field   string
+	Message string
+}
+
+func (c *Config) Validate() ([]ValidationWarning, error) {
+	var warnings []ValidationWarning
+
 	if err := c.validateDaemon(); err != nil {
-		return fmt.Errorf("daemon config invalid: %w", err)
+		return nil, fmt.Errorf("daemon config invalid: %w", err)
 	}
 
-	if err := c.validateNetwork(); err != nil {
-		return fmt.Errorf("network config invalid: %w", err)
+	if warns, err := c.validateNetwork(); err != nil {
+		return nil, fmt.Errorf("network config invalid: %w", err)
+	} else {
+		warnings = append(warnings, warns...)
 	}
 
 	if err := c.validateDiscovery(); err != nil {
-		return fmt.Errorf("discovery config invalid: %w", err)
+		return nil, fmt.Errorf("discovery config invalid: %w", err)
 	}
 
 	if err := c.validateSecurity(); err != nil {
-		return fmt.Errorf("security config invalid: %w", err)
+		return nil, fmt.Errorf("security config invalid: %w", err)
 	}
 
 	if err := c.validateLogging(); err != nil {
-		return fmt.Errorf("logging config invalid: %w", err)
+		return nil, fmt.Errorf("logging config invalid: %w", err)
 	}
 
-	return nil
+	if err := c.validateTimeSync(); err != nil {
+		return nil, fmt.Errorf("time_sync config invalid: %w", err)
+	}
+
+	return warnings, nil
 }
 
 func (c *Config) validateDaemon() error {
@@ -60,33 +72,42 @@ func (c *Config) validateDaemon() error {
 	return nil
 }
 
-func (c *Config) validateNetwork() error {
+func (c *Config) validateNetwork() ([]ValidationWarning, error) {
+	var warnings []ValidationWarning
+
 	if c.Network.BroadcastAddr == "" {
-		return fmt.Errorf("broadcast_addr is required")
+		return nil, fmt.Errorf("broadcast_addr is required")
 	}
 
 	host, port, err := net.SplitHostPort(c.Network.BroadcastAddr)
 	if err != nil {
-		return fmt.Errorf("invalid broadcast_addr: %w", err)
+		return nil, fmt.Errorf("invalid broadcast_addr: %w", err)
 	}
 
 	if host == "" {
-		return fmt.Errorf("broadcast_addr missing host")
+		return nil, fmt.Errorf("broadcast_addr missing host")
 	}
 
 	if port == "" {
-		return fmt.Errorf("broadcast_addr missing port")
+		return nil, fmt.Errorf("broadcast_addr missing port")
 	}
 
 	if c.Network.MaxBroadcastRate < 1 {
-		return fmt.Errorf("max_broadcast_rate must be at least 1")
+		return nil, fmt.Errorf("max_broadcast_rate must be at least 1")
 	}
 
 	if c.Network.MaxBroadcastRate > 100 {
-		return fmt.Errorf("max_broadcast_rate cannot exceed 100")
+		return nil, fmt.Errorf("max_broadcast_rate cannot exceed 100")
 	}
 
-	return nil
+	if len(c.Network.Interfaces) == 0 {
+		warnings = append(warnings, ValidationWarning{
+			Field:   "network.interfaces",
+			Message: "no interfaces specified, will broadcast on all available interfaces",
+		})
+	}
+
+	return warnings, nil
 }
 
 func (c *Config) validateDiscovery() error {
@@ -135,7 +156,7 @@ func (c *Config) validateSecurity() error {
 	}
 
 	if c.Security.TrustedPeers == "" {
-		c.Security.TrustedPeers = "/etc/nss-daemon/trusted_peers.json"
+		c.Security.TrustedPeers = "/etc/disco/trusted_peers.json"
 	}
 
 	return nil
@@ -160,6 +181,30 @@ func (c *Config) validateLogging() error {
 
 	if c.Logging.File != "" && !filepath.IsAbs(c.Logging.File) {
 		return fmt.Errorf("log_file must be absolute path")
+	}
+
+	return nil
+}
+
+func (c *Config) validateTimeSync() error {
+	if !c.TimeSync.Enabled {
+		return nil
+	}
+
+	if c.TimeSync.MinSources < 1 {
+		return fmt.Errorf("min_sources must be at least 1")
+	}
+
+	if c.TimeSync.MaxSourceSpread < 1*time.Millisecond {
+		return fmt.Errorf("max_source_spread must be at least 1ms")
+	}
+
+	if c.TimeSync.MaxStaleAge < 1*time.Second {
+		return fmt.Errorf("max_stale_age must be at least 1s")
+	}
+
+	if c.TimeSync.StepThreshold < 1*time.Millisecond {
+		return fmt.Errorf("step_threshold must be at least 1ms")
 	}
 
 	return nil

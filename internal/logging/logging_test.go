@@ -19,7 +19,7 @@ func TestSetup(t *testing.T) {
 }
 
 func TestSetup_WithFile(t *testing.T) {
-	tmpFile := "/tmp/nss-daemon-test.log"
+	tmpFile := "/tmp/disco-test.log"
 	defer os.Remove(tmpFile)
 
 	cfg := Config{
@@ -221,7 +221,7 @@ func TestConfig_Defaults(t *testing.T) {
 }
 
 func TestConfig_FilePath(t *testing.T) {
-	tmpFile := "/tmp/nss-daemon-test-file.log"
+	tmpFile := "/tmp/disco-test-file.log"
 	defer os.Remove(tmpFile)
 
 	cfg := Config{

@@ -3,88 +3,65 @@ set -e
 
 INSTALL_DIR="/usr/local/bin"
 LIB_DIR="/lib"
-CONFIG_DIR="/etc/nss-daemon"
+CONFIG_DIR="/etc/disco"
 SYSTEMD_DIR="/etc/systemd/system"
 NSSWITCH_FILE="/etc/nsswitch.conf"
+BUILD_BIN="build/bin"
+BUILD_LIB="build/lib"
 
-echo "=== NSS Daemon Installation Script ==="
+echo "=== Disco Daemon Installation Script ==="
 echo "Lightweight name service daemon for offline, airgapped networks"
 echo
 
-# Check if running as root
 if [ "$EUID" -ne 0 ]; then
     echo "Error: Please run as root or with sudo"
     exit 1
 fi
 
-# Check for required binaries
-if [ ! -f "nss-daemon" ] || [ ! -f "nss-status" ] || [ ! -f "nss-key" ]; then
-    echo "Error: nss-daemon, nss-status, and nss-key binaries not found. Run 'make' first."
+if [ ! -f "$BUILD_BIN/disco" ] || [ ! -f "$BUILD_BIN/disco-daemon" ]; then
+    echo "Error: Binaries not found in $BUILD_BIN/. Run 'make' first."
     exit 1
 fi
 
-# Check for optional binaries
-MISSING=""
-for bin in nss-query nss-ping nss-dns nss-config-validate; do
-    if [ ! -f "$bin" ]; then
-        MISSING="$MISSING $bin"
-    fi
-done
-
-if [ -n "$MISSING" ]; then
-    echo "Warning: Optional binaries not found:$MISSING"
-    echo "         Run 'make' to build all binaries."
-fi
-
-# Create nss-daemon user and group
-echo "Creating nss-daemon user and group..."
-if ! id -u nss-daemon &>/dev/null; then
-    useradd --system --no-create-home --shell /bin/false nss-daemon
-    groupadd --system nss-daemon
-    usermod -a -G nss-daemon nss-daemon
-    echo "Created user and group: nss-daemon"
+echo "Creating disco user and group..."
+if ! id -u disco &>/dev/null; then
+    useradd --system --no-create-home --shell /bin/false disco
+    groupadd --system disco
+    usermod -a -G disco disco
+    echo "Created user and group: disco"
 else
-    echo "User nss-daemon already exists"
+    echo "User disco already exists"
 fi
 
-# Install binaries
 echo "Installing binaries..."
-install -m 755 nss-daemon "$INSTALL_DIR/"
-install -m 755 nss-status "$INSTALL_DIR/"
-install -m 755 nss-query "$INSTALL_DIR/"
-install -m 755 nss-key "$INSTALL_DIR/"
-install -m 755 nss-ping "$INSTALL_DIR/"
-install -m 755 nss-dns "$INSTALL_DIR/"
-install -m 755 nss-config-validate "$INSTALL_DIR/"
-echo "Installed: $INSTALL_DIR/nss-daemon"
-echo "Installed: $INSTALL_DIR/nss-status"
-echo "Installed: $INSTALL_DIR/nss-query"
-echo "Installed: $INSTALL_DIR/nss-key"
-echo "Installed: $INSTALL_DIR/nss-ping"
-echo "Installed: $INSTALL_DIR/nss-dns"
-echo "Installed: $INSTALL_DIR/nss-config-validate"
+install -m 755 "$BUILD_BIN/disco" "$INSTALL_DIR/"
+echo "Installed: $INSTALL_DIR/disco (unified CLI)"
 
-# Install NSS module if available
-if [ -f "libnss_daemon.so.2" ]; then
-    echo "Installing NSS module..."
-    install -m 644 libnss_daemon.so.2 "$LIB_DIR/"
-    ln -sf "$LIB_DIR/libnss_daemon.so.2" "$LIB_DIR/libnss_daemon.so"
-    ldconfig
-    echo "Installed: $LIB_DIR/libnss_daemon.so.2"
-else
-    echo "Warning: NSS module not found (expected on Linux)"
+install -m 755 "$BUILD_BIN/disco-daemon" "$INSTALL_DIR/"
+echo "Installed: $INSTALL_DIR/disco-daemon"
+
+if [ -f "$BUILD_BIN/disco-gps-broadcaster" ]; then
+    install -m 755 "$BUILD_BIN/disco-gps-broadcaster" "$INSTALL_DIR/"
+    echo "Installed: $INSTALL_DIR/disco-gps-broadcaster"
 fi
 
-# Create directories
+if [ -f "$BUILD_LIB/libnss_disco.so.2" ]; then
+    echo "Installing NSS module..."
+    install -m 644 "$BUILD_LIB/libnss_disco.so.2" "$LIB_DIR/"
+    ln -sf "$LIB_DIR/libnss_disco.so.2" "$LIB_DIR/libnss_disco.so"
+    ldconfig
+    echo "Installed: $LIB_DIR/libnss_disco.so.2"
+else
+    echo "Warning: NSS module not found at $BUILD_LIB/libnss_disco.so.2 (run 'make libnss' on Linux)"
+fi
+
 echo "Creating directories..."
 mkdir -p "$CONFIG_DIR"
-mkdir -p "/var/lib/nss-daemon"
-mkdir -p "/run/nss-daemon"
-chown -R nss-daemon:nss-daemon "$CONFIG_DIR"
-chown -R nss-daemon:nss-daemon "/var/lib/nss-daemon"
-chown -R nss-daemon:nss-daemon "/run/nss-daemon"
+mkdir -p "/var/lib/disco"
+mkdir -p "/run"
+chown -R disco:disco "$CONFIG_DIR"
+chown -R disco:disco "/var/lib/disco"
 
-# Install configuration if not present
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
     echo "Installing configuration file..."
     if [ -f "config.yaml" ]; then
@@ -92,7 +69,7 @@ if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
     else
         cat >"$CONFIG_DIR/config.yaml" <<EOF
 daemon:
-  socket_path: /run/nss-daemon.sock
+  socket_path: /run/disco.sock
   broadcast_interval: 30s
   record_ttl: 3600s
 
@@ -119,7 +96,7 @@ security:
 logging:
   level: info
   format: text
-  file: /var/log/nss-daemon.log
+  file: /var/log/disco.log
 EOF
     fi
     chown root:root "$CONFIG_DIR/config.yaml"
@@ -129,30 +106,26 @@ else
     echo "Configuration file already exists: $CONFIG_DIR/config.yaml"
 fi
 
-# Install systemd service if available
-if [ -f "nss-daemon.service" ]; then
+if [ -f "libnss/disco.service" ]; then
     echo "Installing systemd service..."
-    install -m 644 nss-daemon.service "$SYSTEMD_DIR/"
+    install -m 644 libnss/disco.service "$SYSTEMD_DIR/"
     systemctl daemon-reload
-    echo "Installed: $SYSTEMD_DIR/nss-daemon.service"
+    echo "Installed: $SYSTEMD_DIR/disco.service"
 else
-    echo "Warning: nss-daemon.service not found"
+    echo "Warning: disco.service not found"
 fi
 
-# Configure nsswitch.conf
 echo
 echo "Configuring nsswitch.conf..."
 if [ -f "$NSSWITCH_FILE" ]; then
-    if grep -q "daemon" "$NSSWITCH_FILE"; then
-        echo "NSSwitch already configured for 'daemon'"
+    if grep -q "disco" "$NSSWITCH_FILE"; then
+        echo "NSSwitch already configured for 'disco'"
     else
         echo "Updating nsswitch.conf..."
         cp "$NSSWITCH_FILE" "${NSSWITCH_FILE}.backup.$(date +%Y%m%d%H%M%S)"
 
-        # Add 'daemon' to hosts line
-        sed -i.bak 's/^hosts:.*$/hosts: files daemon dns/' "$NSSWITCH_FILE"
+        sed -i.bak 's/^hosts:.*$/hosts: files disco dns/' "$NSSWITCH_FILE"
 
-        # Restore from backup if sed created it
         if [ -f "${NSSWITCH_FILE}.bak" ]; then
             rm "${NSSWITCH_FILE}.bak"
         fi
@@ -164,34 +137,40 @@ else
     echo "Warning: $NSSWITCH_FILE not found"
 fi
 
-# Install logrotate config
 echo "Installing logrotate configuration..."
-cat >/etc/logrotate.d/nss-daemon <<EOF
-/var/log/nss-daemon.log {
+cat >/etc/logrotate.d/disco <<EOF
+/var/log/disco.log {
     daily
     rotate 7
     compress
     delaycompress
     missingok
     notifempty
-    create 0640 nss-daemon nss-daemon
+    create 0640 disco disco
 }
 EOF
-echo "Installed: /etc/logrotate.d/nss-daemon"
+echo "Installed: /etc/logrotate.d/disco"
 
-# Set up log file
-touch /var/log/nss-daemon.log
-chown nss-daemon:nss-daemon /var/log/nss-daemon.log
-chmod 640 /var/log/nss-daemon.log
+touch /var/log/disco.log
+chown disco:disco /var/log/disco.log
+chmod 640 /var/log/disco.log
 
 echo
 echo "=== Installation Complete ==="
 echo
 echo "Next steps:"
 echo "  1. Review configuration: $CONFIG_DIR/config.yaml"
-echo "  2. Start daemon: systemctl start nss-daemon"
-echo "  3. Enable autostart: systemctl enable nss-daemon"
-echo "  4. Check status: systemctl status nss-daemon"
-echo "  5. View health: nss-status health"
+echo "  2. Start daemon: systemctl start disco"
+echo "  3. Enable autostart: systemctl enable disco"
+echo "  4. Check status: systemctl status disco"
+echo "  5. View hosts: disco hosts"
+echo "  6. View services: disco services"
+echo
+echo "Quick reference:"
+echo "  disco hosts              # List all hosts"
+echo "  disco hosts <name>       # Show host details"
+echo "  disco services           # List services"
+echo "  disco lookup <name>      # Look up hostname"
+echo "  disco status             # Show daemon status"
 echo
 echo "To uninstall, run: sudo bash uninstall.sh"
