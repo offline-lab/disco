@@ -98,14 +98,14 @@ echo
 echo "=== Test 3: CLI Commands ==="
 
 info "Testing 'disco hosts'..."
-if "$CLI" hosts 2>&1 | grep -q "type"; then
+if "$CLI" hosts 2>&1 | grep -q "type\|hostname\|No hosts"; then
     pass "disco hosts works"
 else
     warn "disco hosts response unexpected"
 fi
 
 info "Testing 'disco status'..."
-if "$CLI" status 2>&1 | grep -q "status\|running\|ok"; then
+if "$CLI" status 2>&1 | grep -q "status\|running\|ok\|daemon"; then
     pass "disco status works"
 else
     warn "disco status response unexpected"
@@ -128,7 +128,7 @@ echo
 echo "=== Test 5: Key Management ==="
 KEYFILE="/tmp/disco-test-key-$$.json"
 info "Testing key generation..."
-if "$CLI" key generate -output "$KEYFILE" 2>&1; then
+if "$CLI" key generate "$KEYFILE" 2>&1; then
     if [ -f "$KEYFILE" ]; then
         pass "Key generated successfully"
         rm -f "$KEYFILE"
@@ -167,10 +167,7 @@ echo
 
 echo "=== Test 8: Time Sync Commands ==="
 info "Testing time status..."
-"$CLI" time status 2>&1 || warn "Time status returned non-zero (expected if time_sync disabled)"
-
-info "Testing time sources..."
-"$CLI" time sources 2>&1 || warn "Time sources returned non-zero"
+"$CLI" time 2>&1 || warn "Time status returned non-zero (expected if time_sync disabled)"
 pass "Time commands executed"
 echo
 

@@ -11,26 +11,6 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 pass() { echo -e "${GREEN}✓ $1${NC}"; }
-fail() { echo -e "${RED}✗ $1${NC}"; exit 1; }
-warn() { echo -e "${YELLOW}! $1${NC}"; }
-info() { echo -e "${BLUE}ℹ $1${NC}"; }
-
-check_docker() {
-    if ! docker info --format '{{.json}' 2>/dev/null 2>&1; then
-        echo "Docker not available, >&2
-        echo "SKIPPED: Multi-node tests require Docker" >&2
-        exit 0
-    fi
-    # ... rest of the script
-}
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-pass() { echo -e "${GREEN}✓ $1${NC}"; }
 fail() {
     echo -e "${RED}✗ $1${NC}"
     exit 1
@@ -45,6 +25,15 @@ if ! command -v docker &>/dev/null; then
     echo ""
     echo "Multi-node tests require Docker."
     echo "Install Docker or run on a machine with Docker available."
+    exit 0
+fi
+
+if ! docker info >/dev/null 2>&1; then
+    echo "========================================"
+    echo " Docker daemon not running - SKIPPING"
+    echo "========================================"
+    echo ""
+    echo "Multi-node tests require a running Docker daemon."
     exit 0
 fi
 
