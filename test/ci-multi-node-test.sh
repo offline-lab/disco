@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.test.yml"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -18,41 +19,15 @@ fail() {
 warn() { echo -e "${YELLOW}! $1${NC}"; }
 info() { echo -e "${BLUE}ℹ $1${NC}"; }
 
-if ! command -v docker &>/dev/null; then
-    echo "========================================"
-    echo " Docker not available - SKIPPING"
-    echo "========================================"
-    echo ""
-    echo "Multi-node tests require Docker."
-    echo "Install Docker or run on a machine with Docker available."
+if ! command -v docker &>/dev/null || ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null; then
+    echo "Docker/Docker Compose not available - SKIPPING"
     exit 0
 fi
 
 if ! docker info >/dev/null 2>&1; then
-    echo "========================================"
-    echo " Docker daemon not running - SKIPPING"
-    echo "========================================"
-    echo ""
-    echo "Multi-node tests require a running Docker daemon."
+    echo "Docker daemon not running - SKIPPING"
     exit 0
 fi
-
-NETWORK_NAME="disco-test-net"
-NODE1="disco-test-node1"
-NODE2="disco-test-node2"
-NODE3="disco-test-node3"
-
-cleanup() {
-    info "Cleaning up containers..."
-    docker rm -f $NODE1 $NODE2 $NODE3 2>/dev/null || true
-    docker network rm $NETWORK_NAME 2>/dev/null || true
-}
-trap cleanup EXIT
-
-echo "========================================"
-echo " Disco Multi-Node Integration Tests"
-echo "========================================"
-echo
 
 DAEMON="${PROJECT_ROOT}/build/bin/disco-daemon-amd64"
 CLI="${PROJECT_ROOT}/build/bin/disco-amd64"
@@ -61,69 +36,59 @@ if [ ! -x "$DAEMON" ]; then
     info "Building Linux binaries..."
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco-daemon-amd64" "${PROJECT_ROOT}/cmd/daemon"
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco-amd64" "${PROJECT_ROOT}/cmd/disco"
-else
-    info "Using pre-built Linux binaries"
 fi
 pass "Binaries ready"
+
+cleanup() {
+    info "Cleaning up..."
+    docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "========================================"
+echo " Disco Multi-Node Integration Tests"
+echo "========================================"
 echo
 
-info "Creating Docker network..."
-docker network create --driver bridge $NETWORK_NAME 2>/dev/null || true
-pass "Network created"
+info "Starting containers with docker-compose..."
+docker compose -f "$COMPOSE_FILE" up -d --wait
+pass "Containers started"
 echo
 
-info "Creating test containers..."
-for node in $NODE1 $NODE2 $NODE3; do
-    docker run -d --name $node \
-        --platform linux/amd64 \
-        --network $NETWORK_NAME \
-        --hostname $node \
-        debian:bookworm \
-        sleep infinity 2>/dev/null || true
-done
-pass "Containers created"
-echo
+NODES="disco-node1 disco-node2 disco-node3"
 
-info "Installing dependencies in containers..."
-for node in $NODE1 $NODE2 $NODE3; do
+info "Installing dependencies..."
+for node in $NODES; do
     docker exec $node apt-get update -qq 2>/dev/null
     docker exec $node apt-get install -y -qq gcc libc6-dev netcat-openbsd iproute2 procps 2>/dev/null
 done
 pass "Dependencies installed"
 echo
 
-info "Copying binaries to containers..."
-for node in $NODE1 $NODE2 $NODE3; do
+info "Copying binaries and building NSS module..."
+for node in $NODES; do
     docker cp "$DAEMON" "$node:/usr/local/bin/disco-daemon"
     docker cp "$CLI" "$node:/usr/local/bin/disco"
     docker exec $node chmod +x /usr/local/bin/disco-daemon /usr/local/bin/disco
-
     docker cp "${PROJECT_ROOT}/libnss/nss_disco.c" "$node:/tmp/nss_disco.c"
     docker exec $node bash -c "gcc -fPIC -shared -o /lib/libnss_disco.so.2 /tmp/nss_disco.c && ldconfig"
 done
 pass "Binaries deployed"
 echo
 
-info "Configuring NSS in containers..."
-for node in $NODE1 $NODE2 $NODE3; do
+info "Configuring NSS..."
+for node in $NODES; do
     docker exec $node bash -c "echo 'hosts: files disco dns' > /etc/nsswitch.conf"
 done
 pass "NSS configured"
 echo
 
-info "Getting container IPs..."
-NODE1_IP=$(docker exec $NODE1 hostname -i | cut -d' ' -f1)
-NODE2_IP=$(docker exec $NODE2 hostname -i | cut -d' ' -f1)
-NODE3_IP=$(docker exec $NODE3 hostname -i | cut -d' ' -f1)
+NODE1_IP=$(docker exec disco-node1 hostname -i | cut -d' ' -f1)
 BROADCAST=$(echo $NODE1_IP | sed 's/\.[0-9]*$/.255/')
-info "Node1 IP: $NODE1_IP"
-info "Node2 IP: $NODE2_IP"
-info "Node3 IP: $NODE3_IP"
 info "Broadcast: $BROADCAST"
-echo
 
 info "Creating daemon configs..."
-for node in $NODE1 $NODE2 $NODE3; do
+for node in $NODES; do
     docker exec $node bash -c "mkdir -p /etc/disco /run && cat > /etc/disco/config.yaml << EOF
 daemon:
   socket_path: /run/disco.sock
@@ -139,7 +104,7 @@ discovery:
   enabled: true
   detect_services: true
   service_port_mapping:
-    ssh: [22]
+    test: [8080]
   scan_interval: 10s
 
 security:
@@ -157,30 +122,23 @@ pass "Configs created"
 echo
 
 info "Starting daemons..."
-for node in $NODE1 $NODE2 $NODE3; do
+for node in $NODES; do
     docker exec $node bash -c "nohup /usr/local/bin/disco-daemon -config /etc/disco/config.yaml > /var/log/disco.log 2>&1 &"
 done
 sleep 3
-pass "Daemons started"
-echo
 
-info "Verifying daemons are running..."
 FAILURES=0
-for node in $NODE1 $NODE2 $NODE3; do
+for node in $NODES; do
     if docker exec $node pgrep -f disco-daemon >/dev/null 2>&1; then
         pass "$node daemon running"
     else
         warn "$node daemon NOT running"
-        docker exec $node cat /var/log/disco.log 2>/dev/null || warn "No log file"
+        docker exec $node cat /var/log/disco.log 2>/dev/null || true
         FAILURES=$((FAILURES + 1))
     fi
 done
-
-if [ $FAILURES -gt 0 ]; then
-    fail "$FAILURES daemon(s) failed to start"
-else
-    pass "All daemons running"
-fi
+[ $FAILURES -gt 0 ] && fail "$FAILURES daemon(s) failed to start"
+pass "All daemons running"
 echo
 
 info "Waiting for discovery (10s)..."
@@ -190,38 +148,38 @@ echo
 echo "=== Testing Cross-Node Discovery ==="
 echo
 
-info "Querying hosts on $NODE1..."
-docker exec $NODE1 /usr/local/bin/disco hosts 2>&1 || warn "Query failed"
+info "Querying hosts on disco-node1..."
+docker exec disco-node1 /usr/local/bin/disco hosts 2>&1
 echo
 
-info "Testing NSS lookup: $NODE1 -> $NODE2..."
-if docker exec $NODE1 getent hosts $NODE2 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
+info "Testing NSS lookup: node1 -> node2..."
+if docker exec disco-node1 getent hosts disco-node2 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
     pass "Node1 discovered Node2 via NSS!"
-    docker exec $NODE1 getent hosts $NODE2
+    docker exec disco-node1 getent hosts disco-node2
 else
     fail "Node1 did NOT discover Node2"
 fi
 echo
 
-info "Testing NSS lookup: $NODE1 -> $NODE3..."
-if docker exec $NODE1 getent hosts $NODE3 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
+info "Testing NSS lookup: node1 -> node3..."
+if docker exec disco-node1 getent hosts disco-node3 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
     pass "Node1 discovered Node3 via NSS!"
-    docker exec $NODE1 getent hosts $NODE3
 else
     fail "Node1 did NOT discover Node3"
 fi
 echo
 
-info "Testing NSS lookup: $NODE2 -> $NODE1..."
-if docker exec $NODE2 getent hosts $NODE1 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
+info "Testing NSS lookup: node2 -> node1..."
+if docker exec disco-node2 getent hosts disco-node1 2>&1 | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
     pass "Node2 discovered Node1 via NSS!"
 else
     fail "Node2 did NOT discover Node1"
 fi
 echo
 
-info "Testing reverse lookup on $NODE1 ($NODE2_IP)..."
-result=$(docker exec $NODE1 getent hosts $NODE2_IP 2>&1 || true)
+NODE2_IP=$(docker exec disco-node2 hostname -i | cut -d' ' -f1)
+info "Testing reverse lookup on node1 ($NODE2_IP)..."
+result=$(docker exec disco-node1 getent hosts $NODE2_IP 2>&1 || true)
 if echo "$result" | grep -qi "node"; then
     pass "Reverse lookup works"
 else
@@ -229,8 +187,29 @@ else
 fi
 echo
 
-info "Testing service discovery..."
-docker exec $NODE1 /usr/local/bin/disco services 2>&1 || warn "Service query failed"
+info "Starting test service listener on disco-node2 (port 8080)..."
+docker exec -d disco-node2 bash -c "while true; do nc -l -p 8080; done"
+sleep 3
+if docker exec disco-node2 pgrep -f "nc -l" >/dev/null 2>&1; then
+    pass "Test listener started"
+else
+    warn "Test listener may not have started"
+fi
+echo
+
+info "Waiting for service discovery (scan + announcement + broadcast ~45s)..."
+sleep 45
+echo
+
+info "Testing service discovery on disco-node1..."
+SERVICES=$(docker exec disco-node1 /usr/local/bin/disco services 2>&1)
+echo "$SERVICES"
+if echo "$SERVICES" | grep -q "test"; then
+    pass "Service discovery working - test service found!"
+else
+    warn "Service not found - checking hosts..."
+    docker exec disco-node1 /usr/local/bin/disco hosts 2>&1 || true
+fi
 echo
 
 echo "========================================"

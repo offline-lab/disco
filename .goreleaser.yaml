@@ -1,0 +1,139 @@
+version: 2
+
+project_name: disco
+
+env:
+  - CGO_ENABLED=0
+
+builds:
+  - id: disco-daemon
+    main: ./cmd/daemon
+    binary: disco-daemon
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      
+  - id: disco-cli
+    main: ./cmd/disco
+    binary: disco
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      
+  - id: gps-broadcaster
+    main: ./cmd/gps-broadcaster
+    binary: disco-gps-broadcaster
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+
+archives:
+  - id: tarball
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    builds:
+      - disco-daemon
+      - disco-cli
+      - gps-broadcaster
+    files:
+      - src: "build/lib/libnss_disco.so.2"
+        dst: lib
+        info:
+          mode: 0644
+      - src: "config.yaml"
+        dst: etc/disco/config.yaml.example
+      - src: "debian/disco-daemon.service"
+        dst: lib/systemd/system
+      - src: "README.md"
+        dst: .
+
+nfpms:
+  - id: disco
+    package_name: disco
+    vendor: Offline Lab
+    homepage: https://github.com/offline-lab/disco
+    maintainer: Flip Hess <flip@offline-lab.org>
+    description: |
+      Disco provides automatic service discovery and name resolution
+      across nodes in an offline network without requiring external DNS.
+      
+      This package includes the daemon, CLI, and NSS module.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    builds:
+      - disco-daemon
+      - disco-cli
+      - gps-broadcaster
+    contents:
+      - src: ./build/lib/libnss_disco.so.2
+        dst: /lib/libnss_disco.so.2
+        file_info:
+          mode: 0644
+      - src: ./config.yaml
+        dst: /etc/disco/config.yaml.example
+        type: config
+      - src: ./debian/disco-daemon.service
+        dst: /lib/systemd/system/disco-daemon.service
+    scripts:
+      postinstall: debian/postinst
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "merge conflict"
+
+release:
+  github:
+    owner: offline-lab
+    name: disco
+  draft: false
+  prerelease: auto
+  mode: append
+  footer: |
+    ## Installation
+    
+    ### Debian/Ubuntu
+    ```bash
+    sudo dpkg -i disco_*.deb
+    sudo ldconfig
+    ```
+    
+    ### RHEL/CentOS/Fedora
+    ```bash
+    sudo rpm -i disco-*.rpm
+    sudo ldconfig
+    ```
+    
+    ### Alpine
+    ```bash
+    sudo apk add --allow-untrusted disco-*.apk
+    ```

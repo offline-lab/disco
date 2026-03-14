@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+ldconfig 2>/dev/null || true
+systemctl daemon-reload 2>/dev/null || true

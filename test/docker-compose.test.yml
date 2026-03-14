@@ -1,0 +1,31 @@
+services:
+  node1:
+    image: debian:trixie
+    platform: linux/amd64
+    hostname: disco-node1
+    container_name: disco-node1
+    command: sleep infinity
+    networks:
+      - disco-net
+
+  node2:
+    image: debian:trixie
+    platform: linux/amd64
+    hostname: disco-node2
+    container_name: disco-node2
+    command: sleep infinity
+    networks:
+      - disco-net
+
+  node3:
+    image: debian:trixie
+    platform: linux/amd64
+    hostname: disco-node3
+    container_name: disco-node3
+    command: sleep infinity
+    networks:
+      - disco-net
+
+networks:
+  disco-net:
+    driver: bridge
