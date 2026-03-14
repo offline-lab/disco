@@ -51,7 +51,9 @@ func TestSetup_WithJSON(t *testing.T) {
 	}
 
 	// Set level back to info for other tests
-	Setup(Config{Level: INFO, Format: "text", File: ""})
+	if err := Setup(Config{Level: INFO, Format: "text", File: ""}); err != nil {
+		t.Logf("Setup reset error: %v", err)
+	}
 }
 
 func TestLogLevel_String(t *testing.T) {
@@ -242,7 +244,6 @@ func TestConfig_FilePath(t *testing.T) {
 }
 
 func TestMultipleSetup(t *testing.T) {
-	// Test that Setup can be called multiple times
 	cfg1 := Config{Level: DEBUG, Format: "text", File: ""}
 	cfg2 := Config{Level: INFO, Format: "text", File: ""}
 
@@ -253,6 +254,75 @@ func TestMultipleSetup(t *testing.T) {
 		t.Errorf("Setup() errors = %v, %v", err1, err2)
 	}
 
-	// Reset to INFO
 	Setup(Config{Level: INFO, Format: "text", File: ""})
+}
+
+func TestFormatMessage(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      string
+		fields   map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "no fields",
+			msg:      "test message",
+			fields:   nil,
+			expected: "test message",
+		},
+		{
+			name:     "empty fields",
+			msg:      "test message",
+			fields:   map[string]interface{}{},
+			expected: "test message",
+		},
+		{
+			name:     "single field",
+			msg:      "test",
+			fields:   map[string]interface{}{"key": "value"},
+			expected: "test [key=value]",
+		},
+		{
+			name:     "multiple fields",
+			msg:      "test",
+			fields:   map[string]interface{}{"key1": "val1", "key2": 123},
+			expected: "test [",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatMessage(tt.msg, tt.fields)
+
+			if tt.name == "multiple fields" {
+				if !containsAll(result, "test [", "key1=", "key2=") {
+					t.Errorf("formatMessage() = %s, want to contain all expected parts", result)
+				}
+			} else if result != tt.expected {
+				t.Errorf("formatMessage() = %s, want %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func containsAll(s string, parts ...string) bool {
+	for _, p := range parts {
+		if !contains(s, p) {
+			return false
+		}
+	}
+	return true
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

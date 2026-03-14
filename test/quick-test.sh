@@ -4,6 +4,14 @@ set -e
 echo "=== Disco Daemon Quick Test ==="
 echo
 
+if ! command -v docker info --format '{{.json}' 2>/dev/null 2>&1; then
+    echo "SKIPPED: Quick test requires Docker" >&1
+    exit 0
+fi
+
+echo "=== Disco Daemon Quick Test ==="
+echo
+
 SOCKET="/tmp/disco-quicktest.sock"
 PIDFILE="/tmp/disco-quicktest.pid"
 CONFIG="/tmp/disco-quicktest.yaml"

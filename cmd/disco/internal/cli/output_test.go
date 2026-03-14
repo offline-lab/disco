@@ -160,14 +160,12 @@ func TestJoinStrings(t *testing.T) {
 }
 
 func TestIsTerminal(t *testing.T) {
-	// Stdout in tests is typically not a terminal
 	if IsTerminal(os.Stdout) {
 		t.Log("Running in a terminal")
 	} else {
 		t.Log("Not running in a terminal (expected in test environment)")
 	}
 
-	// File should not be a terminal
 	f, err := os.CreateTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
@@ -177,5 +175,35 @@ func TestIsTerminal(t *testing.T) {
 
 	if IsTerminal(f) {
 		t.Error("Regular file should not be detected as terminal")
+	}
+}
+
+func TestTable_Print(t *testing.T) {
+	table := NewTable("HOSTNAME", "ADDRESS")
+	table.AddRow("web1", "192.168.1.10")
+
+	table.Print()
+}
+
+func TestPrintSuccess(t *testing.T) {
+	PrintSuccess("operation completed")
+}
+
+func TestPrintError(t *testing.T) {
+	PrintError("operation failed")
+}
+
+func TestPrintWarning(t *testing.T) {
+	PrintWarning("warning message")
+}
+
+func TestGenerateRequestID(t *testing.T) {
+	id := GenerateRequestID("test")
+
+	if id == "" {
+		t.Error("GenerateRequestID() returned empty string")
+	}
+	if !bytes.HasPrefix([]byte(id), []byte("test-")) {
+		t.Errorf("GenerateRequestID() should prefix with 'test-', got %s", id)
 	}
 }

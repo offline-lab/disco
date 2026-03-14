@@ -33,7 +33,9 @@ func (c *DaemonClient) Query(query *nss.Query) (*nss.Response, error) {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(c.timeout))
+	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
+	}
 
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)

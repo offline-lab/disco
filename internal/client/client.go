@@ -45,7 +45,10 @@ func (c *DaemonClient) connect() (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
-	conn.SetDeadline(time.Now().Add(c.timeout))
+	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
+	}
 	return conn, nil
 }
 

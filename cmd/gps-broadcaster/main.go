@@ -219,7 +219,9 @@ func (g *GPSReader) parseGGA(fields []string) {
 	}
 
 	sats := 0
-	fmt.Sscanf(fields[7], "%d", &sats)
+	if _, err := fmt.Sscanf(fields[7], "%d", &sats); err != nil {
+		sats = 0
+	}
 
 	g.mu.Lock()
 	g.satellites = sats
@@ -236,13 +238,25 @@ func parseGPSTime(dateStr, timeStr string) (time.Time, error) {
 	var day, month, year, hour, minute int
 	var second float64
 
-	fmt.Sscanf(dateStr[:2], "%d", &day)
-	fmt.Sscanf(dateStr[2:4], "%d", &month)
-	fmt.Sscanf(dateStr[4:6], "%d", &year)
+	if _, err := fmt.Sscanf(dateStr[:2], "%d", &day); err != nil {
+		return time.Time{}, err
+	}
+	if _, err := fmt.Sscanf(dateStr[2:4], "%d", &month); err != nil {
+		return time.Time{}, err
+	}
+	if _, err := fmt.Sscanf(dateStr[4:6], "%d", &year); err != nil {
+		return time.Time{}, err
+	}
 
-	fmt.Sscanf(timeStr[:2], "%d", &hour)
-	fmt.Sscanf(timeStr[2:4], "%d", &minute)
-	fmt.Sscanf(timeStr[4:], "%f", &second)
+	if _, err := fmt.Sscanf(timeStr[:2], "%d", &hour); err != nil {
+		return time.Time{}, err
+	}
+	if _, err := fmt.Sscanf(timeStr[2:4], "%d", &minute); err != nil {
+		return time.Time{}, err
+	}
+	if _, err := fmt.Sscanf(timeStr[4:], "%f", &second); err != nil {
+		return time.Time{}, err
+	}
 
 	fullYear := 2000 + year
 	if year > 80 {
@@ -351,7 +365,9 @@ func (b *Broadcaster) broadcastToInterfaces(data []byte) {
 					}
 					targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%s", broadcast.String(), port))
 					if err == nil {
-						b.conn.WriteTo(data, targetAddr)
+						if _, writeErr := b.conn.WriteTo(data, targetAddr); writeErr != nil && *verbose {
+							fmt.Printf("Broadcast to %s failed: %v\n", broadcast.String(), writeErr)
+						}
 					}
 				}
 			}
@@ -436,7 +452,12 @@ func main() {
 			return
 
 		case <-ticker.C:
-			gps.SetReadDeadline(time.Now().Add(serialTimeout))
+			if err := gps.SetReadDeadline(time.Now().Add(serialTimeout)); err != nil {
+				if *verbose {
+					fmt.Printf("Failed to set GPS read deadline: %v\n", err)
+				}
+				continue
+			}
 			line, err := gps.ReadLine()
 			if err == nil {
 				gps.ParseNMEA(line)

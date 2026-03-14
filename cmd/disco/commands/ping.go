@@ -82,7 +82,7 @@ func executePings() (successful int, latencies []time.Duration) {
 
 	for i := 0; i < pingCount; i++ {
 		start := time.Now()
-		address := fmt.Sprintf("%s:%d", pingTarget, pingPort)
+		address := net.JoinHostPort(pingTarget, fmt.Sprintf("%d", pingPort))
 		deadline := time.Now().Add(timeout)
 
 		conn, err := net.DialTimeout("udp", address, timeout)
@@ -94,7 +94,7 @@ func executePings() (successful int, latencies []time.Duration) {
 			continue
 		}
 
-		conn.SetDeadline(deadline)
+		_ = conn.SetDeadline(deadline)
 
 		_, err = conn.Write([]byte("PING"))
 		if err != nil {

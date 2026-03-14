@@ -10,6 +10,7 @@
 /disco-time
 /disco-timeset
 /disco-gps-broadcaster
+/disco
 
 # Build directory
 build/
