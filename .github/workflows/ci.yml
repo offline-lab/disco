@@ -104,7 +104,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          VERSION=$(date +%Y.%-m.%-d.%-H%M%S)
+          DATE=$(date +%Y.%m.%d)
+          VERSION="${DATE}.0"
           COMMIT=$(git rev-parse --short HEAD)
 
           mkdir -p build/bin
@@ -214,7 +215,15 @@ jobs:
       - name: Generate version
         id: version
         run: |
-          VERSION=$(date +%Y.%-m.%-d.%-H%M%S)
+          DATE=$(date +%Y.%m.%d)
+          # Find highest counter for today's tags
+          COUNTER=$(git tag -l "v${DATE}.*" 2>/dev/null | sed "s/v${DATE}.//" | sort -n | tail -1)
+          if [ -z "$COUNTER" ]; then
+            COUNTER=1
+          else
+            COUNTER=$((COUNTER + 1))
+          fi
+          VERSION="${DATE}.${COUNTER}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Configure git
