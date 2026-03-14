@@ -1,4 +1,4 @@
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.24-trixie AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ RUN mkdir -p build/bin && \
     CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o build/bin/disco-daemon ./cmd/daemon && \
     CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o build/bin/disco ./cmd/disco
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y \
     build-essential \
