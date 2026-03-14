@@ -152,10 +152,16 @@ echo
 
 echo "=== Test 6: Config Validation ==="
 info "Testing config validation..."
-if "$CLI" config validate "$CONFIG" 2>&1 | grep -qiE "valid|ready|success"; then
-    pass "Config validation passed"
+if [ ! -f "$CONFIG" ]; then
+    fail "Config file not found: $CONFIG"
 else
-    fail "Config validation failed"
+    VALIDATE_OUTPUT=$("$CLI" config validate "$CONFIG" 2>&1) || VALIDATE_EXIT=$?
+    echo "$VALIDATE_OUTPUT"
+    if [ "${VALIDATE_EXIT:-0}" -eq 0 ] && echo "$VALIDATE_OUTPUT" | grep -qiE "valid|ready|success|passed|✅"; then
+        pass "Config validation passed"
+    else
+        fail "Config validation failed (exit: ${VALIDATE_EXIT:-0})"
+    fi
 fi
 echo
 
