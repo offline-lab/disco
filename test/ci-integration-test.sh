@@ -9,10 +9,12 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+FAILURES=0
+
 pass() { echo -e "${GREEN}✓ $1${NC}"; }
 fail() {
     echo -e "${RED}✗ $1${NC}"
-    exit 1
+    FAILURES=$((FAILURES + 1))
 }
 warn() { echo -e "${YELLOW}! $1${NC}"; }
 info() { echo -e "  $1"; }
@@ -92,38 +94,45 @@ sleep 2
 
 if [ ! -S "$SOCKET" ]; then
     fail "Socket not created at $SOCKET"
+else
+    pass "Daemon started, socket created"
 fi
-pass "Daemon started, socket created"
 echo
 
 echo "=== Test 3: CLI Commands ==="
 
 info "Testing 'disco hosts'..."
-if "$CLI" hosts 2>&1 | grep -q "type\|hostname\|No hosts"; then
+HOSTS_OUTPUT=$("$CLI" -s "$SOCKET" hosts 2>&1) || true
+if echo "$HOSTS_OUTPUT" | grep -qiE "hostname|hosts discovered|type"; then
     pass "disco hosts works"
 else
-    warn "disco hosts response unexpected"
+    fail "disco hosts response unexpected: $HOSTS_OUTPUT"
 fi
 
 info "Testing 'disco status'..."
-if "$CLI" status 2>&1 | grep -q "status\|running\|ok\|daemon"; then
+STATUS_OUTPUT=$("$CLI" -s "$SOCKET" status 2>&1) || true
+if echo "$STATUS_OUTPUT" | grep -qiE "daemon|status|socket"; then
     pass "disco status works"
 else
-    warn "disco status response unexpected"
+    fail "disco status response unexpected: $STATUS_OUTPUT"
 fi
 
-info "Testing 'disco ping'..."
-if timeout 5 "$CLI" ping -c 1 -i 2s 2>&1; then
-    pass "disco ping works"
+info "Testing 'disco ping' (requires target)..."
+PING_OUTPUT=$("$CLI" -s "$SOCKET" ping -c 1 localhost 2>&1) || true
+if echo "$PING_OUTPUT" | grep -qiE "results|success|down|unreachable"; then
+    pass "disco ping works (no daemon to ping, but command works)"
 else
-    warn "disco ping failed (expected if no peers)"
+    fail "disco ping failed unexpectedly: $PING_OUTPUT"
 fi
 echo
 
 echo "=== Test 4: Socket Protocol ==="
 info "Testing socket client..."
-cd "$PROJECT_ROOT" && go run test/socket-client/main.go "$SOCKET" 2>&1 || warn "Some socket tests may have failed"
-pass "Socket protocol test completed"
+if cd "$PROJECT_ROOT" && go run test/socket-client/main.go "$SOCKET" 2>&1; then
+    pass "Socket protocol test completed"
+else
+    fail "Socket protocol test failed"
+fi
 echo
 
 echo "=== Test 5: Key Management ==="
@@ -137,16 +146,16 @@ if "$CLI" key generate "$KEYFILE" 2>&1; then
         fail "Key file not created"
     fi
 else
-    warn "Key generation returned non-zero (may be expected)"
+    fail "Key generation command failed"
 fi
 echo
 
 echo "=== Test 6: Config Validation ==="
 info "Testing config validation..."
-if "$CLI" config validate "$CONFIG" 2>&1; then
+if "$CLI" config validate "$CONFIG" 2>&1 | grep -qi "valid\|passed"; then
     pass "Config validation passed"
 else
-    warn "Config validation returned non-zero"
+    fail "Config validation failed"
 fi
 echo
 
@@ -157,7 +166,7 @@ if [ -f /lib/x86_64-linux-gnu/libnss_disco.so.2 ]; then
 
     info "Testing NSS lookup (may fail if daemon not fully configured)..."
     if getent hosts nonexistent-disco-host-12345 2>&1; then
-        warn "NSS lookup returned success for nonexistent host"
+        fail "NSS lookup returned success for nonexistent host"
     else
         pass "NSS lookup correctly failed for nonexistent host"
     fi
@@ -168,8 +177,12 @@ echo
 
 echo "=== Test 8: Time Sync Commands ==="
 info "Testing time status..."
-"$CLI" time 2>&1 || warn "Time status returned non-zero (expected if time_sync disabled)"
-pass "Time commands executed"
+TIME_OUTPUT=$("$CLI" -s "$SOCKET" time 2>&1) || true
+if echo "$TIME_OUTPUT" | grep -qiE "time|sync|disabled"; then
+    pass "Time command works"
+else
+    warn "Time status response unexpected (time_sync may be disabled)"
+fi
 echo
 
 echo "=== Test 9: Daemon Shutdown ==="
@@ -189,4 +202,11 @@ echo "========================================"
 echo " Integration Tests Complete"
 echo "========================================"
 echo
-echo "All critical tests passed."
+
+if [ $FAILURES -gt 0 ]; then
+    echo -e "${RED}FAILED: $FAILURES test(s) failed${NC}"
+    exit 1
+else
+    echo -e "${GREEN}All tests passed${NC}"
+    exit 0
+fi

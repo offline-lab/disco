@@ -54,15 +54,15 @@ echo " Disco Multi-Node Integration Tests"
 echo "========================================"
 echo
 
-DAEMON="${PROJECT_ROOT}/build/bin/disco-daemon"
-CLI="${PROJECT_ROOT}/build/bin/disco"
+DAEMON="${PROJECT_ROOT}/build/bin/disco-daemon-amd64"
+CLI="${PROJECT_ROOT}/build/bin/disco-amd64"
 
 if [ ! -x "$DAEMON" ]; then
     info "Building Linux binaries..."
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco-daemon" "${PROJECT_ROOT}/cmd/daemon"
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco" "${PROJECT_ROOT}/cmd/disco"
+    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco-daemon-amd64" "${PROJECT_ROOT}/cmd/daemon"
+    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "${PROJECT_ROOT}/build/bin/disco-amd64" "${PROJECT_ROOT}/cmd/disco"
 else
-    info "Using pre-built binaries from CI artifacts"
+    info "Using pre-built Linux binaries"
 fi
 pass "Binaries ready"
 echo
@@ -75,6 +75,7 @@ echo
 info "Creating test containers..."
 for node in $NODE1 $NODE2 $NODE3; do
     docker run -d --name $node \
+        --platform linux/amd64 \
         --network $NETWORK_NAME \
         --hostname $node \
         debian:bookworm \
@@ -86,19 +87,19 @@ echo
 info "Installing dependencies in containers..."
 for node in $NODE1 $NODE2 $NODE3; do
     docker exec $node apt-get update -qq 2>/dev/null
-    docker exec $node apt-get install -y -qq gcc libc6-dev netcat-openbsd iproute2 2>/dev/null
+    docker exec $node apt-get install -y -qq gcc libc6-dev netcat-openbsd iproute2 procps 2>/dev/null
 done
 pass "Dependencies installed"
 echo
 
 info "Copying binaries to containers..."
 for node in $NODE1 $NODE2 $NODE3; do
-    docker cp "${PROJECT_ROOT}/build/bin/disco-daemon" "$node:/usr/local/bin/disco-daemon"
-    docker cp "${PROJECT_ROOT}/build/bin/disco" "$node:/usr/local/bin/disco"
+    docker cp "$DAEMON" "$node:/usr/local/bin/disco-daemon"
+    docker cp "$CLI" "$node:/usr/local/bin/disco"
     docker exec $node chmod +x /usr/local/bin/disco-daemon /usr/local/bin/disco
 
     docker cp "${PROJECT_ROOT}/libnss/nss_disco.c" "$node:/tmp/nss_disco.c"
-    docker exec $node bash -c "gcc -fPIC -shared -o /lib/x86_64-linux-gnu/libnss_disco.so.2 /tmp/nss_disco.c && ldconfig"
+    docker exec $node bash -c "gcc -fPIC -shared -o /lib/libnss_disco.so.2 /tmp/nss_disco.c && ldconfig"
 done
 pass "Binaries deployed"
 echo
@@ -157,23 +158,29 @@ echo
 
 info "Starting daemons..."
 for node in $NODE1 $NODE2 $NODE3; do
-    docker exec -d $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml
+    docker exec $node bash -c "nohup /usr/local/bin/disco-daemon -config /etc/disco/config.yaml > /var/log/disco.log 2>&1 &"
 done
 sleep 3
 pass "Daemons started"
 echo
 
 info "Verifying daemons are running..."
+FAILURES=0
 for node in $NODE1 $NODE2 $NODE3; do
     if docker exec $node pgrep -f disco-daemon >/dev/null 2>&1; then
         pass "$node daemon running"
     else
-        warn "$node daemon NOT running - debugging..."
-        docker exec $node cat /etc/disco/config.yaml 2>/dev/null || warn "Config not found"
-        docker exec $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml 2>&1 || true
-        fail "$node daemon NOT running"
+        warn "$node daemon NOT running"
+        docker exec $node cat /var/log/disco.log 2>/dev/null || warn "No log file"
+        FAILURES=$((FAILURES + 1))
     fi
 done
+
+if [ $FAILURES -gt 0 ]; then
+    fail "$FAILURES daemon(s) failed to start"
+else
+    pass "All daemons running"
+fi
 echo
 
 info "Waiting for discovery (10s)..."
