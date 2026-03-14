@@ -13,7 +13,9 @@
 #ifndef _NSS_DISCO_H
 #define _NSS_DISCO_H
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <nss.h>
 #include <netdb.h>
