@@ -113,7 +113,7 @@ else
 fi
 
 info "Testing 'disco ping'..."
-if timeout 5 "$CLI" ping -count 1 -timeout 2s 2>&1; then
+if timeout 5 "$CLI" ping -c 1 -i 2s 2>&1; then
     pass "disco ping works"
 else
     warn "disco ping failed (expected if no peers)"
