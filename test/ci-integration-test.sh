@@ -70,7 +70,8 @@ network:
 discovery:
   enabled: true
   detect_services: false
-  service_port_mapping: {}
+  service_port_mapping:
+    ssh: [22]
   scan_interval: 60s
 
 security:

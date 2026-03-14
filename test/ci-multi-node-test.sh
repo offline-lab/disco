@@ -157,7 +157,7 @@ echo
 
 info "Starting daemons..."
 for node in $NODE1 $NODE2 $NODE3; do
-    docker exec -d $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml
+    docker exec $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml 2>&1 &
 done
 sleep 3
 pass "Daemons started"
@@ -168,6 +168,9 @@ for node in $NODE1 $NODE2 $NODE3; do
     if docker exec $node pgrep -f disco-daemon >/dev/null 2>&1; then
         pass "$node daemon running"
     else
+        warn "$node daemon NOT running - debugging..."
+        docker exec $node cat /etc/disco/config.yaml 2>/dev/null | head -20 || warn "Config not found"
+        docker exec $node /usr/local/bin/disco-daemon -config /etc/disco/config.yaml 2>&1 || true
         fail "$node daemon NOT running"
     fi
 done
