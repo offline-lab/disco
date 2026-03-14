@@ -4,15 +4,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/offline-lab/disco/internal/config"
 	"github.com/offline-lab/disco/internal/nss"
 )
 
+func newTestStore(ttl time.Duration) *RecordStore {
+	return NewRecordStore(ttl, &config.HealthConfig{
+		GracePeriod:     60 * time.Second,
+		ExpireAfter:     3600 * time.Second,
+		CleanupInterval: 30 * time.Second,
+	}, nil)
+}
+
 func TestRecordStore_New(t *testing.T) {
 	ttl := 3600 * time.Second
-	store := NewRecordStore(ttl)
+	store := newTestStore(ttl)
 
 	if store == nil {
-		t.Fatal("NewRecordStore() returned nil")
+		t.Fatal("newTestStore() returned nil")
 	}
 
 	if store.ttl != ttl {
@@ -21,7 +30,7 @@ func TestRecordStore_New(t *testing.T) {
 }
 
 func TestRecordStore_AddOrUpdate(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -51,7 +60,7 @@ func TestRecordStore_AddOrUpdate(t *testing.T) {
 }
 
 func TestRecordStore_GetNonExistent(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	_, exists := store.Get("nonexistent")
 	if exists {
@@ -60,7 +69,7 @@ func TestRecordStore_GetNonExistent(t *testing.T) {
 }
 
 func TestRecordStore_Delete(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -79,7 +88,7 @@ func TestRecordStore_Delete(t *testing.T) {
 }
 
 func TestRecordStore_List(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record1 := &nss.Record{
 		Hostname:  "host1",
@@ -114,7 +123,7 @@ func TestRecordStore_List(t *testing.T) {
 }
 
 func TestRecordStore_ListEmpty(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	all := store.List()
 	// List returns nil for empty, which is acceptable
@@ -124,7 +133,7 @@ func TestRecordStore_ListEmpty(t *testing.T) {
 }
 
 func TestRecordStore_GetByAddr(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -159,7 +168,7 @@ func TestRecordStore_GetByAddr(t *testing.T) {
 }
 
 func TestRecordStore_UpdateRecord(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record1 := &nss.Record{
 		Hostname:  "test-host",
@@ -186,36 +195,38 @@ func TestRecordStore_UpdateRecord(t *testing.T) {
 }
 
 func TestRecordStore_Expiration(t *testing.T) {
-	// Use TTL of 1 second (minimum due to Unix timestamp granularity)
-	store := NewRecordStore(1 * time.Second)
+	// With health-based tracking, records transition to "lost" status
+	// when they exceed ExpireAfter. The Get() method excludes lost records.
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
 		Addresses: []string{"192.168.1.10"},
-		Timestamp: 0,
-		TTL:       0, // Will use store's TTL
+		Timestamp: 0, // Very old timestamp - will be marked as lost
+		TTL:       3600,
+		IsStatic:  false,
 	}
 
-	store.AddOrUpdate(record)
+	// Add directly to store without AddOrUpdate (which would reset timestamp)
+	store.mu.Lock()
+	store.records[record.Hostname] = record
+	store.healthTracker.UpdateRecordStatus(record)
+	store.mu.Unlock()
 
-	// Record should exist immediately
+	// Record should be marked as lost
+	if record.Status != nss.StatusLost {
+		t.Errorf("Expected status %s, got %s", nss.StatusLost, record.Status)
+	}
+
+	// Get() should not return lost records
 	_, exists := store.Get("test-host")
-	if !exists {
-		t.Fatal("Record not found immediately after AddOrUpdate()")
-	}
-
-	// Wait for expiration
-	time.Sleep(1100 * time.Millisecond)
-
-	// Record should be expired now
-	_, exists = store.Get("test-host")
 	if exists {
-		t.Error("Record still exists after expiration")
+		t.Error("Lost record should not be returned by Get()")
 	}
 }
 
 func TestRecordStore_ConcurrentAccess(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	done := make(chan bool)
 
@@ -255,7 +266,7 @@ func TestRecordStore_ConcurrentAccess(t *testing.T) {
 }
 
 func TestRecordStore_RecordWithServices(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -285,7 +296,7 @@ func TestRecordStore_RecordWithServices(t *testing.T) {
 }
 
 func TestRecordStore_RecordWithAliases(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -312,7 +323,7 @@ func TestRecordStore_RecordWithAliases(t *testing.T) {
 }
 
 func TestRecordStore_DefaultTTL(t *testing.T) {
-	store := NewRecordStore(7200 * time.Second)
+	store := newTestStore(7200 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
@@ -330,7 +341,7 @@ func TestRecordStore_DefaultTTL(t *testing.T) {
 }
 
 func TestRecordStore_MultipleRecords(t *testing.T) {
-	store := NewRecordStore(3600 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	for i := 0; i < 100; i++ {
 		record := &nss.Record{
@@ -349,49 +360,46 @@ func TestRecordStore_MultipleRecords(t *testing.T) {
 }
 
 func TestRecordStore_GetByAddrExpired(t *testing.T) {
-	store := NewRecordStore(1 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
 		Addresses: []string{"192.168.1.10"},
-		Timestamp: 0,
-		TTL:       0, // Use store TTL
+		Timestamp: 0, // Very old - will be lost
+		TTL:       3600,
+		IsStatic:  false,
 	}
 
-	store.AddOrUpdate(record)
+	// Add directly without AddOrUpdate which would reset timestamp
+	store.mu.Lock()
+	store.records[record.Hostname] = record
+	store.healthTracker.UpdateRecordStatus(record)
+	store.mu.Unlock()
 
-	// Should exist immediately
+	// Should not be found because it's lost
 	_, exists := store.GetByAddr("192.168.1.10")
-	if !exists {
-		t.Fatal("Record not found immediately")
-	}
-
-	// Wait for expiration
-	time.Sleep(1100 * time.Millisecond)
-
-	// Should not be found after expiration
-	_, exists = store.GetByAddr("192.168.1.10")
 	if exists {
-		t.Error("Expired record still found via GetByAddr()")
+		t.Error("Lost record should not be found via GetByAddr()")
 	}
 }
 
 func TestRecordStore_ListExcludesExpired(t *testing.T) {
-	store := NewRecordStore(1 * time.Second)
+	store := newTestStore(3600 * time.Second)
 
 	record := &nss.Record{
 		Hostname:  "test-host",
 		Addresses: []string{"192.168.1.10"},
-		Timestamp: time.Now().Unix() - 2,
-		TTL:       1,
+		Timestamp: 0, // Very old - will be lost
+		TTL:       3600,
 	}
 
 	store.mu.Lock()
 	store.records[record.Hostname] = record
+	store.healthTracker.UpdateRecordStatus(record)
 	store.mu.Unlock()
 
-	all := store.List()
-	if len(all) != 0 {
-		t.Errorf("Expected 0 records for already-expired record, got %d", len(all))
+	records := store.List()
+	if len(records) != 0 {
+		t.Errorf("Expected 0 records for lost record, got %d", len(records))
 	}
 }

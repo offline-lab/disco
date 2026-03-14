@@ -46,7 +46,7 @@ type Config struct {
 
 var (
 	currentLevel = INFO
-	logger      *log.Logger
+	logger       *log.Logger
 	jsonLog      *jsonLogger
 )
 
@@ -89,7 +89,7 @@ func Setup(cfg Config) error {
 
 	if cfg.Format == "json" {
 		jsonLog = &jsonLogger{
-			logger: log.New(output, "", log.LstdFlags),
+			logger: log.New(output, "", 0),
 		}
 	} else {
 		flags := log.LstdFlags
@@ -156,7 +156,7 @@ func Error(msg string, err error, fields map[string]interface{}) {
 	if jsonLog != nil {
 		jsonLog.Log(ERROR, msg, allFields)
 	} else {
-		log.Printf("[ERROR] %s %v", formatMessage(msg, allFields), err)
+		log.Printf("[ERROR] %s", formatMessage(msg, allFields))
 	}
 }
 

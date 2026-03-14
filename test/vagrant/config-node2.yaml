@@ -1,5 +1,5 @@
 daemon:
-  socket_path: "/run/nss-daemon.sock"
+  socket_path: "/run/disco.sock"
   broadcast_interval: 5s
   record_ttl: 300s
 

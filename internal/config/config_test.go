@@ -15,7 +15,7 @@ func TestConfig_Validate_Daemon(t *testing.T) {
 			name: "Valid daemon config",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -67,7 +67,7 @@ func TestConfig_Validate_Daemon(t *testing.T) {
 			name: "Broadcast interval too short",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 1 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -78,7 +78,7 @@ func TestConfig_Validate_Daemon(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			_, err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -96,7 +96,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 			name: "Valid network config",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -111,7 +111,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 			name: "Missing broadcast address",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -125,7 +125,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 			name: "Invalid broadcast address format",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -139,7 +139,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 			name: "Max broadcast rate too low",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -154,7 +154,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			_, err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -172,7 +172,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 			name: "Valid discovery config",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -195,7 +195,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 			name: "Scan interval too short",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -210,7 +210,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 			name: "Empty service port mapping",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -225,7 +225,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 			name: "Invalid port number",
 			config: &Config{
 				Daemon: DaemonConfig{
-					SocketPath:        "/run/nss-daemon.sock",
+					SocketPath:        "/run/disco.sock",
 					BroadcastInterval: 30 * time.Second,
 					RecordTTL:         3600 * time.Second,
 				},
@@ -243,7 +243,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
+			_, err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -256,8 +256,8 @@ func TestConfig_SetDefaults(t *testing.T) {
 
 	cfg.SetDefaults()
 
-	if cfg.Daemon.SocketPath != "/run/nss-daemon.sock" {
-		t.Errorf("Expected default socket path /run/nss-daemon.sock, got %s", cfg.Daemon.SocketPath)
+	if cfg.Daemon.SocketPath != "/run/disco.sock" {
+		t.Errorf("Expected default socket path /run/disco.sock, got %s", cfg.Daemon.SocketPath)
 	}
 
 	if cfg.Daemon.BroadcastInterval != 30*time.Second {

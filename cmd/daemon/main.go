@@ -3,19 +3,25 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 
 	"github.com/offline-lab/disco/internal/config"
 	"github.com/offline-lab/disco/internal/daemon"
+	"github.com/offline-lab/disco/internal/logging"
+)
+
+var (
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildTime = "unknown"
 )
 
 func printHelp() {
-	fmt.Println("NSS Daemon - Lightweight name service for offline networks")
+	fmt.Println("Disco - Service Discovery Daemon for offline networks")
 	fmt.Println()
 	fmt.Println("WHAT:")
-	fmt.Println("  NSS daemon provides automatic host and service discovery via UDP broadcast.")
+	fmt.Println("  Disco provides automatic host and service discovery via UDP broadcast.")
 	fmt.Println("  It integrates with glibc via NSS module for seamless name resolution.")
 	fmt.Println("  No DNS server required - perfect for airgapped emergency networks.")
 	fmt.Println()
@@ -23,27 +29,30 @@ func printHelp() {
 	fmt.Println("  • Works without DNS servers or resolv.conf")
 	fmt.Println("  • Automatic node discovery - zero configuration")
 	fmt.Println("  • Service detection (www, smtp, ssh, etc.)")
+	fmt.Println("  • Time synchronization via GPS broadcasters")
 	fmt.Println("  • Minimal resource footprint (<20MB RAM)")
 	fmt.Println("  • Runs on embedded systems (Raspberry Pi)")
 	fmt.Println()
 	fmt.Println("USAGE:")
-	fmt.Println("  nss-daemon [options]")
+	fmt.Println("  disco-daemon [options]")
 	fmt.Println()
 	fmt.Println("OPTIONS:")
 	fmt.Println("  --config PATH   Path to configuration file")
-	fmt.Println("                   (default: /etc/nss-daemon/config.yaml)")
+	fmt.Println("                   (default: /etc/disco/config.yaml)")
 	fmt.Println("  --version       Show version and exit")
-	fmt.Println("  --help, -h     Show this help message")
+	fmt.Println("  --help, -h      Show this help message")
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
-	fmt.Println("  nss-daemon")
-	fmt.Println("  nss-daemon --config /custom/config.yaml")
+	fmt.Println("  disco-daemon")
+	fmt.Println("  disco-daemon --config /custom/config.yaml")
 	fmt.Println()
 	fmt.Println("CLIENT TOOLS:")
-	fmt.Println("  nss-query          Query daemon for hosts and services")
-	fmt.Println("  nss-status          Show daemon status and cached records")
-	fmt.Println("  nss-key             Manage security keys")
-	fmt.Println("  nss-config-validate Validate configuration files")
+	fmt.Println("  disco-query         Query daemon for hosts and services")
+	fmt.Println("  disco-status        Show daemon status and cached records")
+	fmt.Println("  disco-time          Show time synchronization status")
+	fmt.Println("  disco-timeset       Force time synchronization")
+	fmt.Println("  disco-key           Manage security keys")
+	fmt.Println("  disco-config        Validate configuration files")
 	fmt.Println()
 	fmt.Println("For more information, visit: https://github.com/offline-lab/disco")
 	os.Exit(0)
@@ -58,8 +67,8 @@ func buildInfo() string {
 }
 
 func main() {
-	configPath := flag.String("config", "/etc/nss-daemon/config.yaml", "Path to configuration file")
-	version := flag.Bool("version", false, "Show version and exit")
+	configPath := flag.String("config", "/etc/disco/config.yaml", "Path to configuration file")
+	showVersion := flag.Bool("version", false, "Show version and exit")
 	help := flag.Bool("help", false, "Show this help message")
 	flag.BoolVar(help, "h", false, "Show this help message")
 	flag.Parse()
@@ -68,33 +77,71 @@ func main() {
 		printHelp()
 	}
 
-	if *version {
-		fmt.Println("nss-daemon v0.1.0")
-		fmt.Println("Build: " + buildInfo())
+	if *showVersion {
+		fmt.Printf("disco-daemon %s\n", Version)
+		fmt.Printf("  Commit:    %s\n", Commit)
+		fmt.Printf("  Built:     %s\n", BuildTime)
+		fmt.Printf("  Platform:  %s\n", buildInfo())
 		os.Exit(0)
 	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Printf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
 	cfg.SetDefaults()
 
-	if err := cfg.Validate(); err != nil {
-		log.Printf("Configuration validation failed: %v", err)
+	warnings, err := cfg.Validate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Configuration validation failed: %v\n", err)
 		os.Exit(1)
+	}
+
+	if err := setupLogging(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to setup logging: %v\n", err)
+		os.Exit(1)
+	}
+
+	for _, w := range warnings {
+		logging.Warn(w.Message, map[string]interface{}{"field": w.Field})
 	}
 
 	d, err := daemon.New(cfg)
 	if err != nil {
-		log.Printf("Failed to create daemon: %v", err)
+		logging.Error("Failed to create daemon", err, nil)
 		os.Exit(1)
 	}
 
 	if err := d.Run(); err != nil {
-		log.Printf("Daemon error: %v", err)
+		logging.Error("Daemon error", err, nil)
 		os.Exit(1)
+	}
+}
+
+func setupLogging(cfg *config.Config) error {
+	level := parseLogLevel(cfg.Logging.Level)
+	return logging.Setup(logging.Config{
+		Level:  level,
+		Format: cfg.Logging.Format,
+		File:   cfg.Logging.File,
+	})
+}
+
+func parseLogLevel(level string) logging.LogLevel {
+	switch level {
+	case "debug":
+		return logging.DEBUG
+	case "info":
+		return logging.INFO
+	case "warn":
+		return logging.WARN
+	case "error":
+		return logging.ERROR
+	case "fatal":
+		return logging.FATAL
+	default:
+		return logging.INFO
 	}
 }

@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "=== NSS Daemon Quick Test ==="
+echo "=== Disco Daemon Quick Test ==="
 echo
 
-SOCKET="/tmp/nss-daemon-quicktest.sock"
-PIDFILE="/tmp/nss-daemon-quicktest.pid"
-CONFIG="/tmp/nss-daemon-quicktest.yaml"
+SOCKET="/tmp/disco-quicktest.sock"
+PIDFILE="/tmp/disco-quicktest.pid"
+CONFIG="/tmp/disco-quicktest.yaml"
 TESTDIR="$(pwd)/test"
 
 cleanup() {
@@ -47,7 +47,7 @@ echo "1. Building..."
 make -s 2>/dev/null
 
 echo "2. Starting daemon..."
-./nss-daemon -config "$CONFIG" 2>/dev/null &
+./build/bin/disco-daemon -config "$CONFIG" 2>/dev/null &
 echo $! >"$PIDFILE"
 sleep 1
 
@@ -61,12 +61,11 @@ echo "3. Testing socket queries..."
 go run "$TESTDIR/socket-client/main.go" "$SOCKET"
 
 echo "4. Testing config validation..."
-./nss-config-validate "$CONFIG" >/dev/null 2>&1 && echo "   OK" || echo "   FAIL"
+./build/bin/disco config validate "$CONFIG" >/dev/null 2>&1 && echo "   OK" || echo "   FAIL"
 
-echo "5. Testing nss-key..."
+echo "5. Testing disco key..."
 KEYFILE="/tmp/test-key-$$.json"
-./nss-key generate "$KEYFILE" >/dev/null 2>&1 && echo "   OK" || echo "   FAIL"
-rm -f "$KEYFILE"
+./build/bin/disco key generate >/dev/null 2>&1 && echo "   OK" || echo "   FAIL"
 
 echo
 echo "=== All tests passed ==="

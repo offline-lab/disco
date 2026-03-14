@@ -1,0 +1,4 @@
+lib/libnss_disco.so.2
+etc/disco/config.yaml.example
+usr/share/doc/disco/
+usr/share/man/

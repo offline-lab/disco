@@ -1,19 +1,23 @@
-# Binaries
-nss-daemon
-nss-status
-nss-query
-nss-key
-nss-config-validate
-nss-ping
-nss-dns
-nss-announce
+# Binaries (old location - kept for reference)
+/disco-daemon
+/disco-status
+/disco-query
+/disco-key
+/disco-config
+/disco-ping
+/disco-dns
+/disco-announce
+/disco-time
+/disco-timeset
+/disco-gps-broadcaster
 
 # Build directory
 build/
+dist/
 
 # NSS Module
-libnss_daemon.so.2
-libnss_daemon.so
+libnss_disco.so.2
+libnss_disco.so
 
 # Test files
 test-keys.json
@@ -35,3 +39,7 @@ Thumbs.db
 # Build artifacts
 *.o
 *.a
+
+# Coverage
+coverage.out
+coverage.html

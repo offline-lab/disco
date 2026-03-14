@@ -1,0 +1,64 @@
+Source: disco
+Section: net
+Priority: optional
+Maintainer: Flip Hess <flip@offline-lab.org>
+Build-Depends: debhelper (>= 12), golang-go (>= 1.21), gcc, libc6-dev
+Standards-Version: 4.5.0
+Homepage: https://github.com/offline-lab/disco
+Vcs-Browser: https://github.com/offline-lab/disco
+Vcs-Git: https://github.com/offline-lab/disco.git
+
+Package: disco-daemon
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, disco-common
+Recommends: disco-cli
+Description: Lightweight name service daemon for airgapped networks
+ Disco provides automatic service discovery and name resolution across
+ nodes in an offline network without requiring external DNS services.
+ .
+ This package contains the main daemon that handles discovery, broadcast,
+ service detection, and name resolution via a Unix domain socket.
+
+Package: disco-cli
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, disco-common
+Description: Unified CLI for Disco daemon management
+ Command-line interface for managing and querying the Disco daemon.
+ Provides commands for host discovery, service management, key
+ management, time synchronization, and network diagnostics.
+ .
+ All functionality is unified into a single 'disco' command.
+
+Package: disco-gps-broadcaster
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: GPS time broadcaster for Disco time synchronization
+ Broadcasts GPS time via UDP for time synchronization in airgapped
+ networks. Required when using the optional time_sync feature in
+ disco-daemon.
+ .
+ Can also be implemented on Arduino or ESP32 devices.
+
+Package: disco-common
+Architecture: all
+Depends: ${misc:Depends}
+Description: Common files for Disco packages
+ Shared configuration, documentation, and NSS module for Disco.
+ This package is automatically installed as a dependency of
+ disco-daemon and disco-cli.
+ .
+ Includes the NSS module (libnss_disco.so.2) for native Linux
+ name resolution integration.
+
+Package: disco
+Architecture: all
+Depends: disco-daemon (= ${binary:Version}), disco-cli (= ${binary:Version}), disco-common (= ${binary:Version})
+Description: Complete Disco name service suite (metapackage)
+ Metapackage that installs all Disco components:
+ .
+   * disco-daemon - Main discovery and name service daemon
+   * disco-cli - Unified command-line interface
+   * disco-common - Shared files and NSS module
+   * disco-gps-broadcaster - GPS time broadcaster
+ .
+ This is the recommended package for full installations.

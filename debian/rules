@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export GO111MODULE=on
+export GOPROXY=https://proxy.golang.org,direct
+
+# Define go version
+GO := go
+GO_VERSION := $(shell go version | grep -oP 'go\K[0-9.]+' | head -1)
+
+%:
+	dh $@ --with systemd
+
+override_dh_auto_build:
+	# Build Go binaries
+	$(GO) build -ldflags="-s -w" -o build/bin/disco cmd/disco/main.go
+	$(GO) build -ldflags="-s -w" -o build/bin/disco-daemon cmd/daemon/main.go
+	$(GO) build -ldflags="-s -w" -o build/bin/disco-gps-broadcaster cmd/gps-broadcaster/main.go
+	
+	# Build NSS module (only on Linux)
+ifneq ($(shell uname -s),Darwin)
+	gcc -fPIC -shared -o build/lib/libnss_disco.so.2 libnss/nss_disco.c
+endif
+
+override_dh_auto_test:
+	# Run tests
+	$(GO) test -v ./...
+
+override_dh_auto_install:
+	# Create directories
+	mkdir -p debian/disco-daemon/usr/bin
+	mkdir -p debian/disco-cli/usr/bin
+	mkdir -p debian/disco-gps-broadcaster/usr/bin
+	mkdir -p debian/disco-common/lib
+	mkdir -p debian/disco-common/etc/disco
+	mkdir -p debian/disco-common/var/lib/disco
+	mkdir -p debian/disco-common/usr/share/doc/disco
+	mkdir -p debian/disco-common/usr/share/man/man1
+	
+	# Install binaries
+	cp build/bin/disco-daemon debian/disco-daemon/usr/bin/
+	cp build/bin/disco debian/disco-cli/usr/bin/
+	cp build/bin/disco-gps-broadcaster debian/disco-gps-broadcaster/usr/bin/
+	
+	# Install NSS module
+ifneq ($(shell uname -s),Darwin)
+	cp build/lib/libnss_disco.so.2 debian/disco-common/lib/
+endif
+	
+	# Install configuration
+	cp config.yaml debian/disco-common/etc/disco/config.yaml.example
+	
+	# Install documentation
+	cp README.md debian/disco-common/usr/share/doc/disco/
+	cp CHANGELOG.md debian/disco-common/usr/share/doc/disco/
+	cp docs/ARCHITECTURE.md debian/disco-common/usr/share/doc/disco/ || true
+	cp docs/POWER_EFFICIENCY.md debian/disco-common/usr/share/doc/disco/ || true
+	
+	# Install man pages
+	cp docs/man/disco.1.md debian/disco-common/usr/share/man/man1/disco.1 || true
+	cp docs/man/disco-daemon.1.md debian/disco-common/usr/share/man/man1/disco-daemon.1 || true
+
+override_dh_systemd_enable:
+	dh_systemd_enable --name=disco
+
+override_dh_systemd_start:
+	dh_systemd_start --name=disco
+
+override_dh_auto_clean:
+	rm -rf build/
+	dh_auto_clean
