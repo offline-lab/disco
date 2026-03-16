@@ -333,44 +333,6 @@ time_sync:
 **TTL**: 5 minutes (configurable)  
 **Validation**: Reject messages older than TTL
 
-### Threat Mitigation
-
-| Threat | Mitigation | Config |
-|--------|-----------|---------|
-| DNS poisoning | Message signing | `require_signed: true` |
-| Replay attacks | Timestamp validation | `max_stale_age: 30s` |
-| Spoofing | HMAC signatures | Pre-share keys |
-| Broadcast storms | Rate limiting | `max_broadcast_rate: 10` |
-| DoS | Connection limits | 100 concurrent connections |
-
----
-
-## Performance Characteristics
-
-### Scalability
-
-- **Tested**: 50 nodes in single broadcast domain
-- **Discovery Time**: 30-60 seconds
-- **Query Latency**: <1ms (Unix socket)
-- **Memory per Record**: ~100 bytes
-
-### Resource Budget
-
-| Resource | Limit | Typical Usage |
-|----------|-------|---------------|
-| Memory | <20MB | ~10MB |
-| CPU | <20% | <5% idle |
-| Disk | Minimal | In-memory only |
-| Network | <1 KB/sec | ~100 bytes/node |
-
-### Optimization Techniques
-
-1. **In-memory cache** - No disk I/O
-2. **Passive discovery** - No active health checks
-3. **Rate limiting** - Prevents broadcast storms
-4. **Connection pooling** - Reuse Unix socket connections
-5. **Efficient serialization** - JSON over socket
-
 ---
 
 ## Configuration
@@ -504,14 +466,6 @@ disco hosts --json | jq '.[] | select(.status!="healthy")'
 disco time
 ```
 
-### Metrics (Future)
-
-- Records in cache
-- Queries per second
-- Broadcast messages sent/received
-- Cache hit/miss ratio
-- Average query latency
-
 ### Logging
 
 **Text Format**:
@@ -551,26 +505,6 @@ disco time
 - Dynamic TTL adjustment
 - Health checking (passive only)
 - Web UI
-
----
-
-## Future Enhancements
-
-### Planned (v1.1+)
-
-- IPv6 support
-- Multi-interface broadcasts
-- Persistent cache (optional)
-- Prometheus metrics endpoint
-- Web UI for monitoring
-- Advanced health checks
-
-### Under Consideration
-
-- mDNS compatibility
-- Service load balancing
-- Dynamic TTL based on network conditions
-- Mesh networking support
 
 ---
 
