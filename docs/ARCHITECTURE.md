@@ -1,6 +1,6 @@
 # Disco Architecture
 
-**Version**: 1.0.0-rc1  
+**Version**: 1.0.0-rc1
 **Last Updated**: 2026-03-01
 
 ---
@@ -171,7 +171,7 @@ disco-daemon
 
 ### Broadcast Message Format
 
-**Port**: UDP 5354  
+**Port**: UDP 5354
 **Address**: 255.255.255.255 (configurable)
 
 **Message Types**:
@@ -211,7 +211,7 @@ disco-daemon
 
 ### NSS Query Protocol
 
-**Transport**: Unix domain socket (`/run/disco.sock`)  
+**Transport**: Unix domain socket (`/run/disco.sock`)
 **Format**: JSON
 
 **Query**:
@@ -295,43 +295,6 @@ time_sync:
   min_sources: 2
   require_signed: true
 ```
-
----
-
-## Security Model
-
-### Trust Model
-
-**Option 1: Trust on First Use (TOFU)**
-- Accept first announcement from each hostname
-- Store fingerprint locally
-- Warn on changes
-
-**Option 2: Pre-shared Keys**
-- Generate keys: `disco key generate`
-- Distribute public keys to all nodes
-- Configure: `require_signed: true`
-
-### Message Signing
-
-**Algorithm**: HMAC-SHA256  
-**Key Size**: 256 bits (32 bytes)
-
-**Signing Process**:
-1. Canonicalize JSON message
-2. Calculate HMAC-SHA256 signature
-3. Add signature to message
-
-**Verification Process**:
-1. Extract signature from message
-2. Recalculate HMAC with trusted key
-3. Compare signatures
-
-### Replay Protection
-
-**Mechanism**: Timestamp + TTL  
-**TTL**: 5 minutes (configurable)  
-**Validation**: Reject messages older than TTL
 
 ---
 
@@ -419,30 +382,30 @@ logging:
 
 ### Daemon Not Running
 
-**Symptom**: Name resolution fails  
-**Detection**: Socket file missing  
-**Fallback**: NSS continues to next source (dns)  
+**Symptom**: Name resolution fails
+**Detection**: Socket file missing
+**Fallback**: NSS continues to next source (dns)
 **Recovery**: Auto-restart via systemd
 
 ### Network Partition
 
-**Symptom**: Nodes not discovered  
-**Detection**: Records expire  
-**Behavior**: Mark as "lost", eventually removed  
+**Symptom**: Nodes not discovered
+**Detection**: Records expire
+**Behavior**: Mark as "lost", eventually removed
 **Recovery**: Auto-discovery on network restore
 
 ### Cache Expiration
 
-**Symptom**: All records expire  
-**Detection**: Empty host list  
-**Behavior**: Returns NOTFOUND  
+**Symptom**: All records expire
+**Detection**: Empty host list
+**Behavior**: Returns NOTFOUND
 **Recovery**: Wait for next broadcast (30s default)
 
 ### Time Sync Failure
 
-**Symptom**: Clock drift  
-**Detection**: No TIME_ANNOUNCE messages  
-**Behavior**: Logs warning, continues operation  
+**Symptom**: Clock drift
+**Detection**: No TIME_ANNOUNCE messages
+**Behavior**: Logs warning, continues operation
 **Recovery**: Manual time set or GPS restore
 
 ---
@@ -559,5 +522,5 @@ internal/
 
 ---
 
-**Architecture by**: Flip Hess  
+**Architecture by**: Flip Hess
 **AI Assistance**: GLM-4.7 and GLM-5 from [z.ai](https://z.ai)
