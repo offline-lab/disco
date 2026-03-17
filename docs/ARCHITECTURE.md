@@ -1,6 +1,6 @@
 # Disco Architecture
 
-**Version**: 1.0.0-rc1  
+**Version**: 1.0.0-rc1
 **Last Updated**: 2026-03-01
 
 ---
@@ -171,7 +171,7 @@ disco-daemon
 
 ### Broadcast Message Format
 
-**Port**: UDP 5354  
+**Port**: UDP 5354
 **Address**: 255.255.255.255 (configurable)
 
 **Message Types**:
@@ -211,7 +211,7 @@ disco-daemon
 
 ### NSS Query Protocol
 
-**Transport**: Unix domain socket (`/run/disco.sock`)  
+**Transport**: Unix domain socket (`/run/disco.sock`)
 **Format**: JSON
 
 **Query**:
@@ -295,81 +295,6 @@ time_sync:
   min_sources: 2
   require_signed: true
 ```
-
----
-
-## Security Model
-
-### Trust Model
-
-**Option 1: Trust on First Use (TOFU)**
-- Accept first announcement from each hostname
-- Store fingerprint locally
-- Warn on changes
-
-**Option 2: Pre-shared Keys**
-- Generate keys: `disco key generate`
-- Distribute public keys to all nodes
-- Configure: `require_signed: true`
-
-### Message Signing
-
-**Algorithm**: HMAC-SHA256  
-**Key Size**: 256 bits (32 bytes)
-
-**Signing Process**:
-1. Canonicalize JSON message
-2. Calculate HMAC-SHA256 signature
-3. Add signature to message
-
-**Verification Process**:
-1. Extract signature from message
-2. Recalculate HMAC with trusted key
-3. Compare signatures
-
-### Replay Protection
-
-**Mechanism**: Timestamp + TTL  
-**TTL**: 5 minutes (configurable)  
-**Validation**: Reject messages older than TTL
-
-### Threat Mitigation
-
-| Threat | Mitigation | Config |
-|--------|-----------|---------|
-| DNS poisoning | Message signing | `require_signed: true` |
-| Replay attacks | Timestamp validation | `max_stale_age: 30s` |
-| Spoofing | HMAC signatures | Pre-share keys |
-| Broadcast storms | Rate limiting | `max_broadcast_rate: 10` |
-| DoS | Connection limits | 100 concurrent connections |
-
----
-
-## Performance Characteristics
-
-### Scalability
-
-- **Tested**: 50 nodes in single broadcast domain
-- **Discovery Time**: 30-60 seconds
-- **Query Latency**: <1ms (Unix socket)
-- **Memory per Record**: ~100 bytes
-
-### Resource Budget
-
-| Resource | Limit | Typical Usage |
-|----------|-------|---------------|
-| Memory | <20MB | ~10MB |
-| CPU | <20% | <5% idle |
-| Disk | Minimal | In-memory only |
-| Network | <1 KB/sec | ~100 bytes/node |
-
-### Optimization Techniques
-
-1. **In-memory cache** - No disk I/O
-2. **Passive discovery** - No active health checks
-3. **Rate limiting** - Prevents broadcast storms
-4. **Connection pooling** - Reuse Unix socket connections
-5. **Efficient serialization** - JSON over socket
 
 ---
 
@@ -457,30 +382,30 @@ logging:
 
 ### Daemon Not Running
 
-**Symptom**: Name resolution fails  
-**Detection**: Socket file missing  
-**Fallback**: NSS continues to next source (dns)  
+**Symptom**: Name resolution fails
+**Detection**: Socket file missing
+**Fallback**: NSS continues to next source (dns)
 **Recovery**: Auto-restart via systemd
 
 ### Network Partition
 
-**Symptom**: Nodes not discovered  
-**Detection**: Records expire  
-**Behavior**: Mark as "lost", eventually removed  
+**Symptom**: Nodes not discovered
+**Detection**: Records expire
+**Behavior**: Mark as "lost", eventually removed
 **Recovery**: Auto-discovery on network restore
 
 ### Cache Expiration
 
-**Symptom**: All records expire  
-**Detection**: Empty host list  
-**Behavior**: Returns NOTFOUND  
+**Symptom**: All records expire
+**Detection**: Empty host list
+**Behavior**: Returns NOTFOUND
 **Recovery**: Wait for next broadcast (30s default)
 
 ### Time Sync Failure
 
-**Symptom**: Clock drift  
-**Detection**: No TIME_ANNOUNCE messages  
-**Behavior**: Logs warning, continues operation  
+**Symptom**: Clock drift
+**Detection**: No TIME_ANNOUNCE messages
+**Behavior**: Logs warning, continues operation
 **Recovery**: Manual time set or GPS restore
 
 ---
@@ -503,14 +428,6 @@ disco hosts --json | jq '.[] | select(.status!="healthy")'
 ```bash
 disco time
 ```
-
-### Metrics (Future)
-
-- Records in cache
-- Queries per second
-- Broadcast messages sent/received
-- Cache hit/miss ratio
-- Average query latency
 
 ### Logging
 
@@ -551,26 +468,6 @@ disco time
 - Dynamic TTL adjustment
 - Health checking (passive only)
 - Web UI
-
----
-
-## Future Enhancements
-
-### Planned (v1.1+)
-
-- IPv6 support
-- Multi-interface broadcasts
-- Persistent cache (optional)
-- Prometheus metrics endpoint
-- Web UI for monitoring
-- Advanced health checks
-
-### Under Consideration
-
-- mDNS compatibility
-- Service load balancing
-- Dynamic TTL based on network conditions
-- Mesh networking support
 
 ---
 
@@ -625,5 +522,5 @@ internal/
 
 ---
 
-**Architecture by**: Flip Hess  
+**Architecture by**: Flip Hess
 **AI Assistance**: GLM-4.7 and GLM-5 from [z.ai](https://z.ai)

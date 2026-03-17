@@ -20,26 +20,26 @@ make --version
 
 ### Option 1: Build Everything
 ```bash
-cd /path/to/nss-daemon
+cd /path/to/disco-daemon
 make
 ```
 
 This builds:
-- `nss-daemon` - Go daemon binary
-- `libnss_daemon.so.2` - C NSS module
+- `disco-daemon` - Go daemon binary
+- `libnss_disco.so.2` - C NSS module
 
 ### Option 2: Build Separately
 
 #### Build Daemon
 ```bash
-go build -o nss-daemon cmd/daemon/main.go
+go build -o disco-daemon cmd/daemon/main.go
 ```
 
 #### Build NSS Module
 ```bash
 make libnss
 # or
-gcc -fPIC -shared -o libnss_daemon.so.2 -Wl,-soname,libnss_daemon.so.2 libnss/nss_daemon.c
+gcc -fPIC -shared -o libnss_disco.so.2 -Wl,-soname,libnss_disco.so.2 libnss/nss_disco.c
 ```
 
 ## Installation
@@ -47,14 +47,14 @@ gcc -fPIC -shared -o libnss_daemon.so.2 -Wl,-soname,libnss_daemon.so.2 libnss/ns
 ### Step 1: Install Daemon
 
 ```bash
-sudo install -m 755 nss-daemon /usr/local/bin/
+sudo install -m 755 disco-daemon /usr/local/bin/
 ```
 
 ### Step 2: Install NSS Module
 
 ```bash
-sudo install -m 644 libnss_daemon.so.2 /lib/x86_64-linux-gnu/
-sudo ln -sf /lib/x86_64-linux-gnu/libnss_daemon.so.2 /lib/x86_64-linux-gnu/libnss_daemon.so
+sudo install -m 644 libnss_disco.so.2 /lib/x86_64-linux-gnu/
+sudo ln -sf /lib/x86_64-linux-gnu/libnss_disco.so.2 /lib/x86_64-linux-gnu/libnss_disco.so
 sudo ldconfig
 ```
 
@@ -70,28 +70,28 @@ Backup current config:
 sudo cp /etc/nsswitch.conf /etc/nsswitch.conf.bak
 ```
 
-Edit `/etc/nsswitch.conf` and add `daemon` to the `hosts` line:
+Edit `/etc/nsswitch.conf` and add `disco` to the `hosts` line:
 ```
-hosts: files daemon dns
+hosts: files disco dns
 ```
 
 Order matters:
 - `files` - Check /etc/hosts first (fastest)
-- `daemon` - Check our NSS module
+- `disco` - Check our NSS module
 - `dns` - Fallback to DNS
 
 ### Step 4: Create Configuration Directory
 
 ```bash
-sudo mkdir -p /etc/nss-daemon
+sudo mkdir -p /etc/disco-daemon
 ```
 
 ### Step 5: Install Configuration
 
 ```bash
-sudo cp config.yaml /etc/nss-daemon/
+sudo cp config.yaml /etc/disco-daemon/
 # or create custom config:
-sudo nano /etc/nss-daemon/config.yaml
+sudo vim /etc/disco-daemon/config.yaml
 ```
 
 ### Step 6: Create Runtime Directory
@@ -107,7 +107,7 @@ sudo chmod 1777 /run
 
 ```yaml
 daemon:
-  socket_path: "/run/nss-daemon.sock"
+  socket_path: "/run/disco.sock"
   broadcast_interval: 30s
   record_ttl: 3600s
 
@@ -128,9 +128,9 @@ discovery:
 
 security:
   enabled: false
-  cert_path: "/etc/nss-daemon/cert.pem"
-  key_path: "/etc/nss-daemon/key.pem"
-  trusted_peers: "/etc/nss-daemon/trusted.pem"
+  cert_path: "/etc/disco-daemon/cert.pem"
+  key_path: "/etc/disco-daemon/key.pem"
+  trusted_peers: "/etc/disco-daemon/trusted.pem"
   require_signed: false
 
 logging:
@@ -145,7 +145,7 @@ The daemon validates configuration on startup. Common issues:
 
 | Error | Solution |
 |-------|----------|
-| `socket_path must be absolute` | Use full path like `/run/nss-daemon.sock` |
+| `socket_path must be absolute` | Use full path like `/run/disco.sock` |
 | `invalid broadcast_addr` | Format must be `host:port` like `255.255.255.255:5353` |
 | `scan_interval must be at least 10 seconds` | Increase scan_interval |
 | `log_level invalid` | Use: debug, info, warn, error, fatal |
@@ -156,15 +156,15 @@ The daemon validates configuration on startup. Common issues:
 
 ```bash
 # Run directly
-sudo /usr/local/bin/nss-daemon -config /etc/nss-daemon/config.yaml
+sudo /usr/local/bin/disco-daemon -config /etc/disco-daemon/config.yaml
 
 # Or if in PATH
-sudo nss-daemon -config /etc/nss-daemon/config.yaml
+sudo disco-daemon -config /etc/disco-daemon/config.yaml
 ```
 
 ### systemd Service
 
-Create `/etc/systemd/system/nss-daemon.service`:
+Create `/etc/systemd/system/disco-daemon.service`:
 ```ini
 [Unit]
 Description=NSS Daemon for service discovery
@@ -172,7 +172,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/nss-daemon -config /etc/nss-daemon/config.yaml
+ExecStart=/usr/local/bin/disco-daemon -config /etc/disco-daemon/config.yaml
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -185,18 +185,18 @@ WantedBy=multi-user.target
 Enable and start:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable nss-daemon
-sudo systemctl start nss-daemon
-sudo systemctl status nss-daemon
+sudo systemctl enable disco-daemon
+sudo systemctl start disco-daemon
+sudo systemctl status disco-daemon
 ```
 
 ### Init Scripts (sysvinit)
 
-Create `/etc/init.d/nss-daemon`:
+Create `/etc/init.d/disco-daemon`:
 ```bash
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          nss-daemon
+# Provides:          disco-daemon
 # Required-Start:    $network $remote_fs
 # Required-Stop:     $network $remote_fs
 # Default-Start:     2 3 4 5
@@ -205,17 +205,17 @@ Create `/etc/init.d/nss-daemon`:
 # Description:       NSS Daemon for service discovery
 ### END INIT INFO
 
-DAEMON=/usr/local/bin/nss-daemon
-CONFIG=/etc/nss-daemon/config.yaml
-PIDFILE=/var/run/nss-daemon.pid
+DAEMON=/usr/local/bin/disco-daemon
+CONFIG=/etc/disco-daemon/config.yaml
+PIDFILE=/var/run/disco-daemon.pid
 
 case "$1" in
     start)
-        echo "Starting nss-daemon..."
+        echo "Starting disco-daemon..."
         start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- -config $CONFIG
         ;;
     stop)
-        echo "Stopping nss-daemon..."
+        echo "Stopping disco-daemon..."
         start-stop-daemon --stop --quiet --pidfile $PIDFILE --exec $DAEMON
         ;;
     restart)
@@ -234,8 +234,8 @@ esac
 
 Enable:
 ```bash
-sudo chmod +x /etc/init.d/nss-daemon
-sudo update-rc.d nss-daemon defaults
+sudo chmod +x /etc/init.d/disco-daemon
+sudo update-rc.d disco-daemon defaults
 ```
 
 ## Verification
@@ -243,8 +243,8 @@ sudo update-rc.d nss-daemon defaults
 ### Test NSS Module Loading
 
 ```bash
-ldconfig -p | grep libnss_daemon
-# Should show libnss_daemon.so.2 and libnss_daemon.so
+ldconfig -p | grep libnss_disco
+# Should show libnss_disco.so.2 and libnss_disco.so
 ```
 
 ### Test nsswitch.conf
@@ -258,13 +258,13 @@ cat /etc/nsswitch.conf | grep hosts
 
 ```bash
 # Start daemon (if not running)
-sudo nss-daemon -config /etc/nss-daemon/config.yaml &
+sudo disco-daemon -config /etc/disco-daemon/config.yaml &
 
 # Check socket exists
-ls -la /run/nss-daemon.sock
+ls -la /run/disco.sock
 
 # Test connectivity
-echo '{"type":"QUERY_BY_NAME","name":"test","request_id":"test-001"}' | nc -U /run/nss-daemon.sock
+echo '{"type":"QUERY_BY_NAME","name":"test","request_id":"test-001"}' | nc -U /run/disco.sock
 ```
 
 ### Test Name Resolution
@@ -297,7 +297,7 @@ sudo tcpdump -i any -n udp port 5353
 ldconfig -p | grep libnss
 
 # Check library paths
-echo "/lib/x86_64-linux-gnu/" | sudo tee -a /etc/ld.so.conf.d/nss-daemon.conf
+echo "/lib/x86_64-linux-gnu/" | sudo tee -a /etc/ld.so.conf.d/disco-daemon.conf
 sudo ldconfig
 ```
 
@@ -305,13 +305,13 @@ sudo ldconfig
 
 ```bash
 # Check permissions
-ls -la /run/nss-daemon.sock
+ls -la /run/disco.sock
 
 # Remove old socket
-sudo rm /run/nss-daemon.sock
+sudo rm /run/disco.sock
 
 # Check daemon is running
-ps aux | grep nss-daemon
+ps aux | grep disco-daemon
 ```
 
 ### Name Resolution Not Working
@@ -350,14 +350,14 @@ ip addr show eth0
 
 ```bash
 # Check configuration validity
-nss-daemon -config /etc/nss-daemon/config.yaml -check
+disco-daemon -config /etc/disco-daemon/config.yaml -check
 
 # Check logs
-journalctl -u nss-daemon -n 50
-tail -f /var/log/syslog | grep nss-daemon
+journalctl -u disco-daemon -n 50
+tail -f /var/log/syslog | grep disco-daemon
 
 # Run in foreground to see errors
-sudo nss-daemon -config /etc/nss-daemon/config.yaml
+sudo disco-daemon -config /etc/disco-daemon/config.yaml
 ```
 
 ## Uninstallation
@@ -366,17 +366,17 @@ sudo nss-daemon -config /etc/nss-daemon/config.yaml
 
 ```bash
 # Stop daemon
-sudo systemctl stop nss-daemon
-sudo systemctl disable nss-daemon
+sudo systemctl stop disco-daemon
+sudo systemctl disable disco-daemon
 
 # Remove binary
-sudo rm /usr/local/bin/nss-daemon
+sudo rm /usr/local/bin/disco-daemon
 
 # Remove configuration
-sudo rm -rf /etc/nss-daemon
+sudo rm -rf /etc/disco-daemon
 
 # Remove service file
-sudo rm /etc/systemd/system/nss-daemon.service
+sudo rm /etc/systemd/system/disco-daemon.service
 sudo systemctl daemon-reload
 ```
 
@@ -384,37 +384,37 @@ sudo systemctl daemon-reload
 
 ```bash
 # Remove library
-sudo rm /lib/x86_64-linux-gnu/libnss_daemon.so.2
-sudo rm /lib/x86_64-linux-gnu/libnss_daemon.so
+sudo rm /lib/x86_64-linux-gnu/libnss_disco.so.2
+sudo rm /lib/x86_64-linux-gnu/libnss_disco.so
 sudo ldconfig
 
 # Restore nsswitch.conf
 sudo cp /etc/nsswitch.conf.bak /etc/nsswitch.conf
 
 # Or edit to remove "daemon" line
-sudo nano /etc/nsswitch.conf
+sudo vim /etc/nsswitch.conf
 ```
 
 ## Buildroot Integration
 
 For embedded systems using Buildroot:
 
-### Recipe (nss-daemon.mk)
+### Recipe (disco-daemon.mk)
 
 ```makefile
-NSS_DAEMON_VERSION = 0.1.0
-NSS_DAEMON_SITE = $(call github,flip,nss-daemon,$(NSS_DAEMON_VERSION))
-NSS_DAEMON_LICENSE = MIT
-NSS_DAEMON_DEPENDENCIES = host-golang host-gcc
+DISCO_DAEMON_VERSION = 0.1.0
+DISCO_DAEMON_SITE = $(call github,offline-lab,disco,$(DISCO_DAEMON_VERSION))
+DISCO_DAEMON_LICENSE = MIT
+DISCO_DAEMON_DEPENDENCIES = host-golang host-gcc
 
-define NSS_DAEMON_BUILD_CMDS
+define DISCO_DAEMON_BUILD_CMDS
 	$(HOST_GO_ENV) $(MAKE) -C $(@D)
 endef
 
-define NSS_DAEMON_INSTALL_TARGET_CMDS
-	$(INSTALL) -D -m 755 $(@D)/nss-daemon $(TARGET_DIR)/usr/bin/nss-daemon
-	$(INSTALL) -D -m 644 $(@D)/libnss_daemon.so.2 $(TARGET_DIR)/lib/libnss_daemon.so.2
-	ln -sf libnss_daemon.so.2 $(TARGET_DIR)/lib/libnss_daemon.so
+define DISCO_DAEMON_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 755 $(@D)/disco-daemon $(TARGET_DIR)/usr/bin/disco-daemon
+	$(INSTALL) -D -m 644 $(@D)/libnss_disco.so.2 $(TARGET_DIR)/lib/libnss_disco.so.2
+	ln -sf $(TARGET_DIR)/lib/libnss_disco.so.2 $(TARGET_DIR)/lib/libnss_disco.so
 endef
 
 $(eval $(generic-package))
@@ -422,9 +422,9 @@ $(eval $(generic-package))
 
 ### Config Fragment
 
-Create `package/nss-daemon/nsswitch.conf`:
+Create `package/disco-daemon/nsswitch.conf`:
 ```
-hosts: files daemon dns
+hosts: files disco dns
 ```
 
 This will be installed to `/etc/nsswitch.conf`.
@@ -433,14 +433,14 @@ This will be installed to `/etc/nsswitch.conf`.
 
 For Yocto/OpenEmbedded:
 
-### Recipe (nss-daemon.bb)
+### Recipe (disco-daemon.bb)
 
 ```bitbake
 SUMMARY = "NSS Daemon for service discovery"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=xxxx"
 
-SRC_URI = "git://github.com/flip/nss-daemon.git;branch=main \
+SRC_URI = "git://github.com/offline-lab/disco.git;branch=main \
            file://nsswitch.conf"
 
 S = "${WORKDIR}/git"
@@ -451,21 +451,21 @@ inherit go-mod
 
 do_install() {
     install -d ${D}${bindir}
-    install -m 0755 ${B}/nss-daemon ${D}${bindir}/nss-daemon
+    install -m 0755 ${B}/disco-daemon ${D}${bindir}/disco-daemon
 
     install -d ${D}${libdir}
-    install -m 0644 ${B}/libnss_daemon.so.2 ${D}${libdir}/libnss_daemon.so.2
-    ln -sf libnss_daemon.so.2 ${D}${libdir}/libnss_daemon.so
+    install -m 0644 ${B}/libnss_disco.so.2 ${D}${libdir}/libnss_disco.so.2
+    ln -sf libnss_disco.so.2 ${D}${libdir}/libnss_disco.so
 
-    install -d ${D}${sysconfdir}/nss-daemon
-    install -m 0644 ${B}/config.yaml ${D}${sysconfdir}/nss-daemon/config.yaml
+    install -d ${D}${sysconfdir}/disco-daemon
+    install -m 0644 ${B}/config.yaml ${D}${sysconfdir}/disco-daemon/config.yaml
     install -m 0644 ${WORKDIR}/nsswitch.conf ${D}${sysconfdir}/nsswitch.conf
 }
 
-FILES_${PN} += "${bindir}/nss-daemon \
-                ${libdir}/libnss_daemon.so.2 \
-                ${libdir}/libnss_daemon.so \
-                ${sysconfdir}/nss-daemon/config.yaml \
+FILES_${PN} += "${bindir}/disco-daemon \
+                ${libdir}/libnss_disco.so.2 \
+                ${libdir}/libnss_disco.so \
+                ${sysconfdir}/disco-daemon/config.yaml \
                 ${sysconfdir}/nsswitch.conf"
 ```
 
@@ -474,17 +474,17 @@ FILES_${PN} += "${bindir}/nss-daemon \
 ### Build Image
 
 ```bash
-docker build -t nss-daemon .
+docker build -t disco-daemon .
 ```
 
 ### Run Container
 
 ```bash
-docker run --name nss-daemon \
+docker run --name disco-daemon \
   --network host \
   --cap-add=NET_ADMIN,NET_RAW \
-  -v /etc/nss-daemon:/etc/nss-daemon \
-  nss-daemon
+  -v /etc/disco-daemon:/etc/disco-daemon \
+  disco-daemon
 ```
 
 ## Next Steps

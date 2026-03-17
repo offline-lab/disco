@@ -18,7 +18,7 @@ This guide covers testing the NSS daemon on different platforms and configuratio
 Test your configuration file before starting the daemon:
 
 ```bash
-./nss-config-validate /path/to/config.yaml
+./disco config validate /path/to/config.yaml
 ```
 
 This will:
@@ -37,10 +37,10 @@ make all
 ```
 
 This builds:
-- nss-daemon (main daemon)
-- nss-query (query tool)
-- nss-key (key management)
-- nss-config-validate (config validator)
+- disco daemon (main daemon)
+- disco query (query tool)
+- disco key (key management)
+- disco config-validate (config validator)
 
 ### 3. Basic Daemon Test
 
@@ -48,13 +48,13 @@ Start the daemon and verify it's running:
 
 ```bash
 # Start daemon
-./nss-daemon -config config.yaml
+./disco daemon -config config.yaml
 
 # In another terminal, test socket
-ls -l /run/nss-daemon.sock
+ls -l /run/disco daemon.sock
 
 # Query the daemon
-./nss-query hosts
+./disco query hosts
 ```
 
 ## Multi-Node Testing
@@ -71,13 +71,13 @@ docker-compose -f docker-compose-host.yml up -d
 sleep 60
 
 # Check what web1 sees
-docker exec -it nss-daemon-web1 nss-query hosts
+docker exec -it disco daemon-web1 disco query hosts
 
 # Check detailed view
-docker exec -it nss-daemon-web1 nss-query hosts-services
+docker exec -it disco daemon-web1 disco query hosts-services
 
 # Check services
-docker exec -it nss-daemon-web1 nss-query services
+docker exec -it disco daemon-web1 disco query services
 
 # View logs
 docker-compose -f docker-compose-host.yml logs -f
@@ -93,47 +93,47 @@ For testing on actual hardware:
 1. **Setup on each host:**
    ```bash
    sudo ./install.sh
-   sudo systemctl start nss-daemon
+   sudo systemctl start disco daemon
    ```
 
 2. **Configure each host:**
    ```bash
-   # Edit /etc/nss-daemon/config.yaml
+   # Edit /etc/disco daemon/config.yaml
    # Set unique hostname
    # Configure same broadcast address
    ```
 
 3. **Restart on each host:**
    ```bash
-   sudo systemctl restart nss-daemon
+   sudo systemctl restart disco daemon
    ```
 
 4. **Test discovery (on any host):**
    ```bash
-   sudo nss-query hosts
-   sudo nss-query hosts-services
-   sudo nss-query services
+   sudo disco query hosts
+   sudo disco query hosts-services
+   sudo disco query services
    ```
 
 5. **Verify each host sees the others:**
    ```bash
    # On host1
-   sudo nss-query hosts | grep host2
-   sudo nss-query hosts | grep host3
+   sudo disco query hosts | grep host2
+   sudo disco query hosts | grep host3
 
    # On host2
-   sudo nss-query hosts | grep host1
-   sudo nss-query hosts | grep host3
+   sudo disco query hosts | grep host1
+   sudo disco query hosts | grep host3
    ```
 
 ## Automated Tests
 
 ### Run Test Script
 
-The `test/nss-test.sh` script performs basic validation:
+The `test/disco test.sh` script performs basic validation:
 
 ```bash
-./test/nss-test.sh
+./test/disco test.sh
 ```
 
 This checks:
@@ -159,7 +159,7 @@ Test the NSS module on Linux:
 
 ```bash
 # Install NSS module
-sudo make install-libnss-only
+sudo make install-libdisco only
 
 # Configure nsswitch.conf
 sudo sed -i 's/hosts: files dns/hosts: files daemon dns/' /etc/nsswitch.conf
@@ -169,7 +169,7 @@ getent hosts web1
 getent hosts mail1
 
 # Verify it uses the daemon
-grep web1 /var/log/nss-daemon.log
+grep web1 /var/log/disco daemon.log
 ```
 
 ### Service Discovery Testing
@@ -184,7 +184,7 @@ python3 -m http.server 8080 &
 sleep 65
 
 # Check if service detected
-sudo nss-query hosts-services
+sudo disco query hosts-services
 
 # Should show www service on your host
 ```
@@ -195,21 +195,21 @@ Test security features:
 
 ```bash
 # Generate keys
-sudo nss-key generate
+sudo disco key generate
 
 # Add trusted peer
-sudo nss-key add-trusted <public-key>
+sudo disco key add-trusted <public-key>
 
 # Enable security in config
-# Edit /etc/nss-daemon/config.yaml
+# Edit /etc/disco daemon/config.yaml
 # Set: security.enabled: true
 # Set: security.require_signed: true
 
 # Restart daemon
-sudo systemctl restart nss-daemon
+sudo systemctl restart disco daemon
 
 # Verify signing works (check logs)
-sudo journalctl -u nss-daemon -f
+sudo journalctl -u disco daemon -f
 ```
 
 ## Troubleshooting
@@ -228,7 +228,7 @@ sudo iptables -L | grep 5353
 sudo firewall-cmd --list-ports | grep 5353
 
 # Check config
-sudo nss-config-validate /etc/nss-daemon/config.yaml
+sudo disco config-validate /etc/disco daemon/config.yaml
 
 # Enable discovery in config
 # discovery.enabled: true
@@ -250,7 +250,7 @@ sudo netstat -tlnp
 # In config: discovery.scan_interval: 10s
 
 # Restart daemon
-sudo systemctl restart nss-daemon
+sudo systemctl restart disco daemon
 ```
 
 ### NSS Module Not Working
@@ -294,15 +294,15 @@ Test with multiple hosts:
 
 ```bash
 # Start daemon
-./nss-daemon -config config.yaml &
+./disco daemon -config config.yaml &
 
 # Generate test traffic
 for i in {1..100}; do
-    ./nss-query lookup host$i
+    ./disco query lookup host$i
 done
 
 # Check metrics (if available)
-./nss-query hosts | wc -l
+./disco query hosts | wc -l
 ```
 
 ### Memory Usage
@@ -311,10 +311,10 @@ Monitor daemon memory usage:
 
 ```bash
 # Start daemon
-./nss-daemon -config config.yaml &
+./disco daemon -config config.yaml &
 
 # Monitor memory
-watch -n 1 'ps aux | grep nss-daemon'
+watch -n 1 'ps aux | grep disco daemon'
 ```
 
 Expected: <20MB for typical deployment (50+ hosts)
@@ -361,8 +361,8 @@ Watch for these log entries:
 - [ ] Configuration validates
 - [ ] Daemon starts successfully
 - [ ] Socket is created
-- [ ] nss-query hosts works
-- [ ] nss-query services works
+- [ ] disco query hosts works
+- [ ] disco query services works
 - [ ] Self-host is discovered
 - [ ] Other hosts are discovered (multi-node)
 - [ ] Services are detected
@@ -382,7 +382,7 @@ For CI/CD pipelines:
   run: make all
 
 - name: Validate Config
-  run: ./nss-config-validate config.yaml
+  run: ./disco config validate config.yaml
 
 - name: Unit Tests
   run: make test
@@ -391,7 +391,7 @@ For CI/CD pipelines:
   run: |
     docker-compose -f docker-compose.host.yml up -d
     sleep 60
-    docker exec nss-daemon-web1 nss-query hosts
+    docker exec disco daemon-web1 disco query hosts
     docker-compose down
 ```
 
@@ -400,6 +400,6 @@ For CI/CD pipelines:
 After passing tests:
 1. Deploy to production
 2. Monitor with journalctl
-3. Use nss-query for diagnostics
+3. Use disco query for diagnostics
 4. Adjust configuration based on network size
 5. Consider enabling security for production
