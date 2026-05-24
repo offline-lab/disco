@@ -87,19 +87,3 @@ func forceTimeUpdate(cmd *cobra.Command, args []string) {
 	fmt.Printf("  Offset: %.6f seconds\n", result.Offset)
 	fmt.Printf("  Sources: %d\n", result.SourceCount)
 }
-
-func printTimeStatusResult(s *client.TimeStatus) {
-	syncStr := "NO"
-	if s.Synced {
-		syncStr = "YES"
-	}
-	fmt.Printf("Synced: %s\n", syncStr)
-	fmt.Printf("Sources: %d\n", s.SourceCount)
-	fmt.Printf("Offset: %.6f seconds\n", s.LastOffset)
-	if s.LastSyncTime != "" {
-		fmt.Printf("Last sync: %s\n", s.LastSyncTime)
-	}
-	if s.LastError != "" {
-		fmt.Printf("Error: %s\n", s.LastError)
-	}
-}
