@@ -31,7 +31,7 @@ type ServiceInfo struct {
 type Server struct {
 	config   *Config
 	provider RecordProvider
-	server   *dns.Server
+	servers  []*dns.Server
 	stopChan chan struct{}
 }
 
@@ -69,12 +69,13 @@ func (s *Server) Start() error {
 			Net:     "udp",
 			Handler: mux,
 		}
+		s.servers = append(s.servers, server)
 
-		go func() {
-			if err := server.ListenAndServe(); err != nil {
-				fmt.Printf("DNS server error on %s: %v\n", bindAddr, err)
+		go func(srv *dns.Server) {
+			if err := srv.ListenAndServe(); err != nil {
+				logging.Error("DNS server error", err, map[string]interface{}{"addr": srv.Addr})
 			}
-		}()
+		}(server)
 	}
 
 	return nil
@@ -82,8 +83,8 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() {
 	close(s.stopChan)
-	if s.server != nil {
-		_ = s.server.Shutdown()
+	for _, srv := range s.servers {
+		_ = srv.Shutdown()
 	}
 }
 
@@ -131,8 +132,11 @@ func (s *Server) handleReverse(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (s *Server) handleAQuery(q dns.Question, m *dns.Msg, domain string) {
-	name := strings.TrimSuffix(q.Name, ".")
-	name = strings.TrimSuffix(name, domain)
+	suffix := "." + domain
+	if !strings.HasSuffix(q.Name, suffix) {
+		return
+	}
+	name := strings.TrimSuffix(q.Name, suffix)
 
 	if name == "" {
 		return
@@ -166,8 +170,11 @@ func (s *Server) handleAQuery(q dns.Question, m *dns.Msg, domain string) {
 }
 
 func (s *Server) handleTXTQuery(q dns.Question, m *dns.Msg, domain string) {
-	name := strings.TrimSuffix(q.Name, ".")
-	name = strings.TrimSuffix(name, domain)
+	suffix := "." + domain
+	if !strings.HasSuffix(q.Name, suffix) {
+		return
+	}
+	name := strings.TrimSuffix(q.Name, suffix)
 
 	records := s.provider.GetAllRecords()
 	for _, rec := range records {
@@ -209,7 +216,7 @@ func (s *Server) handleSRVQuery(q dns.Question, m *dns.Msg, domain string) {
 	// SRV format: _service._proto.domain
 	// e.g., _www._tcp.disco.
 	parts := strings.Split(strings.TrimSuffix(q.Name, "."), ".")
-	if len(parts) < 4 {
+	if len(parts) < 3 {
 		return
 	}
 
@@ -246,8 +253,11 @@ func (s *Server) handleSRVQuery(q dns.Question, m *dns.Msg, domain string) {
 
 func (s *Server) handleCNAMEQuery(q dns.Question, m *dns.Msg, domain string) {
 	// CNAME for service aliases: www.host.disco -> host.disco
-	name := strings.TrimSuffix(q.Name, ".")
-	name = strings.TrimSuffix(name, domain)
+	suffix := "." + domain
+	if !strings.HasSuffix(q.Name, suffix) {
+		return
+	}
+	name := strings.TrimSuffix(q.Name, suffix)
 
 	records := s.provider.GetAllRecords()
 	for _, rec := range records {

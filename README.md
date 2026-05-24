@@ -52,7 +52,7 @@ Disco provides automatic service discovery and name resolution across nodes in a
 - **Multi-Source Validation**: Requires 2+ agreeing sources before adjusting clock
 - **Clock Discipline**: Step for large offsets (>128ms), slew for small offsets
 - **Security**: Signed time messages with HMAC-SHA256
-- **Status Query**: `disco-time` tool shows sync status
+- **Status Query**: `disco time` shows sync status
 
 #### Time Sync Configuration
 
@@ -91,16 +91,12 @@ GPS broadcasters send `TIME_ANNOUNCE` messages via UDP broadcast on port 5354:
 
 #### Time Status Monitoring
 
-Use `disco-time` to check synchronization status:
+Use `disco time` to check synchronization status:
 
-    $ disco-time
+    $ disco time
     Synced: YES
     Sources: 2
     Offset: +0.000023 seconds
-
-Watch mode for continuous monitoring:
-
-    $ disco-time -w
 
 ### Management Tools
 
@@ -154,7 +150,7 @@ sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/disco-daemon
 - `disco time` - Time sync status
 - `disco timeset` - Force time update
 
-**Key Management**: `disco-key` - Generate and manage security keys
+**Key Management**: `disco key` - Generate and manage security keys
 
 ## Quick Start
 
@@ -253,11 +249,12 @@ See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive testing ins
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and design
-- [docs/POWER_EFFICIENCY.md](docs/POWER_EFFICIENCY.md) - Power and resource optimization
-- [.opencode/plans/PROJECT.md](.opencode/plans/PROJECT.md) - Project overview and roadmap
+- [docs/PROJECT.md](docs/PROJECT.md) - Project overview and roadmap
+- [docs/INSTALL.md](docs/INSTALL.md) - Installation guide
+- [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Testing guide
 
 ## License
 
 MIT
 
-Copyright (c) 2024-2025 Flip Hess
+Copyright (c) 2024-2026 Flip Hess

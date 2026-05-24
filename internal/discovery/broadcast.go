@@ -84,6 +84,7 @@ type Listener struct {
 	duplicateFilter *DuplicateFilter
 	keyManager      *security.KeyManager
 	requireSigned   bool
+	wg              sync.WaitGroup
 
 	bufPool sync.Pool
 }
@@ -362,12 +363,10 @@ type rawMessage struct {
 }
 
 func (l *Listener) Start(stopChan chan struct{}) {
-	var wg sync.WaitGroup
-
 	for _, conn := range l.conns {
-		wg.Add(1)
+		l.wg.Add(1)
 		go func(c *net.UDPConn) {
-			defer wg.Done()
+			defer l.wg.Done()
 			buf := l.bufPool.Get().([]byte)
 			defer l.bufPool.Put(buf) //nolint:staticcheck // SA6002: slice is already pointer-like, pool is fine
 
@@ -443,7 +442,6 @@ func (l *Listener) Start(stopChan chan struct{}) {
 	}
 
 	<-stopChan
-	wg.Wait()
 }
 
 func (l *Listener) handleTimeMessage(data []byte, stopChan chan struct{}) {
@@ -452,7 +450,7 @@ func (l *Listener) handleTimeMessage(data []byte, stopChan chan struct{}) {
 		return
 	}
 
-	if l.requireSigned && timeMsg.Signature == nil && l.keyManager != nil {
+	if l.requireSigned && timeMsg.Signature == nil {
 		return
 	}
 
@@ -492,12 +490,13 @@ func (l *Listener) TimeMessages() <-chan *TimeAnnounceMessage {
 }
 
 func (l *Listener) Stop() {
-	if l.duplicateFilter != nil {
-		l.duplicateFilter.Stop()
-	}
-	close(l.messageChan)
-	close(l.timeMessageChan)
 	for _, conn := range l.conns {
 		_ = conn.Close()
+	}
+	l.wg.Wait()
+	close(l.messageChan)
+	close(l.timeMessageChan)
+	if l.duplicateFilter != nil {
+		l.duplicateFilter.Stop()
 	}
 }

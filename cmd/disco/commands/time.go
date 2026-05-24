@@ -25,7 +25,6 @@ var timesetCmd = &cobra.Command{
 }
 
 var (
-	forceUpdate   bool
 	allowBackward bool
 	verbose       bool
 	timeoutDur    time.Duration
@@ -35,7 +34,6 @@ func init() {
 	rootCmd.AddCommand(timeCmd)
 	rootCmd.AddCommand(timesetCmd)
 
-	timesetCmd.Flags().BoolVarP(&forceUpdate, "force", "f", false, "Force immediate time update")
 	timesetCmd.Flags().BoolVarP(&allowBackward, "backward", "b", false, "Allow stepping clock backward")
 	timesetCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	timesetCmd.Flags().DurationVarP(&timeoutDur, "timeout", "t", 30*time.Second, "Timeout for operations")
@@ -65,15 +63,6 @@ func showTimeStatus(cmd *cobra.Command, args []string) {
 
 func forceTimeUpdate(cmd *cobra.Command, args []string) {
 	c := client.NewDaemonClient(getSocketPath()).WithTimeout(timeoutDur)
-
-	if !forceUpdate {
-		status, err := c.GetTimeStatus()
-		if err != nil {
-			checkError(fmt.Errorf("failed to get time status: %w", err))
-		}
-		printTimeStatusResult(status)
-		return
-	}
 
 	if verbose {
 		fmt.Printf("Sending force update request...\n")

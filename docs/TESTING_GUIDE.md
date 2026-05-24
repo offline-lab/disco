@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers testing the NSS daemon on different platforms and configurations.
+This guide covers testing Disco on different platforms and configurations.
 
 ## Prerequisites
 
@@ -37,10 +37,9 @@ make all
 ```
 
 This builds:
-- disco daemon (main daemon)
-- disco query (query tool)
-- disco key (key management)
-- disco config-validate (config validator)
+- disco-daemon (main daemon)
+- disco (unified CLI tool)
+- libnss_disco.so.2 (NSS module)
 
 ### 3. Basic Daemon Test
 
@@ -48,13 +47,13 @@ Start the daemon and verify it's running:
 
 ```bash
 # Start daemon
-./disco daemon -config config.yaml
+sudo ./disco-daemon --config config.yaml
 
 # In another terminal, test socket
-ls -l /run/disco daemon.sock
+ls -l /run/disco.sock
 
 # Query the daemon
-./disco query hosts
+./disco hosts
 ```
 
 ## Multi-Node Testing
@@ -71,13 +70,10 @@ docker-compose -f docker-compose-host.yml up -d
 sleep 60
 
 # Check what web1 sees
-docker exec -it disco daemon-web1 disco query hosts
-
-# Check detailed view
-docker exec -it disco daemon-web1 disco query hosts-services
+docker exec -it disco-web1 disco hosts
 
 # Check services
-docker exec -it disco daemon-web1 disco query services
+docker exec -it disco-web1 disco services
 
 # View logs
 docker-compose -f docker-compose-host.yml logs -f
@@ -93,47 +89,46 @@ For testing on actual hardware:
 1. **Setup on each host:**
    ```bash
    sudo ./install.sh
-   sudo systemctl start disco daemon
+   sudo systemctl start disco
    ```
 
 2. **Configure each host:**
    ```bash
-   # Edit /etc/disco daemon/config.yaml
+   # Edit /etc/disco/config.yaml
    # Set unique hostname
    # Configure same broadcast address
    ```
 
 3. **Restart on each host:**
    ```bash
-   sudo systemctl restart disco daemon
+   sudo systemctl restart disco
    ```
 
 4. **Test discovery (on any host):**
    ```bash
-   sudo disco query hosts
-   sudo disco query hosts-services
-   sudo disco query services
+   disco hosts
+   disco services
    ```
 
 5. **Verify each host sees the others:**
    ```bash
    # On host1
-   sudo disco query hosts | grep host2
-   sudo disco query hosts | grep host3
+   disco hosts | grep host2
+   disco hosts | grep host3
 
    # On host2
-   sudo disco query hosts | grep host1
-   sudo disco query hosts | grep host3
+   disco hosts | grep host1
+   disco hosts | grep host3
    ```
 
 ## Automated Tests
 
 ### Run Test Script
 
-The `test/disco test.sh` script performs basic validation:
+The `test/quick-test.sh` script performs basic validation:
 
 ```bash
-./test/disco test.sh
+./test/quick-test.sh
 ```
 
 This checks:
@@ -162,14 +157,14 @@ Test the NSS module on Linux:
 sudo make install-libdisco only
 
 # Configure nsswitch.conf
-sudo sed -i 's/hosts: files dns/hosts: files daemon dns/' /etc/nsswitch.conf
+sudo sed -i 's/hosts: files dns/hosts: files disco dns/' /etc/nsswitch.conf
 
 # Test name resolution
 getent hosts web1
 getent hosts mail1
 
 # Verify it uses the daemon
-grep web1 /var/log/disco daemon.log
+grep web1 /var/log/disco.log
 ```
 
 ### Service Discovery Testing
@@ -184,7 +179,7 @@ python3 -m http.server 8080 &
 sleep 65
 
 # Check if service detected
-sudo disco query hosts-services
+disco services
 
 # Should show www service on your host
 ```
@@ -201,15 +196,15 @@ sudo disco key generate
 sudo disco key add-trusted <public-key>
 
 # Enable security in config
-# Edit /etc/disco daemon/config.yaml
+# Edit /etc/disco/config.yaml
 # Set: security.enabled: true
 # Set: security.require_signed: true
 
 # Restart daemon
-sudo systemctl restart disco daemon
+sudo systemctl restart disco
 
 # Verify signing works (check logs)
-sudo journalctl -u disco daemon -f
+sudo journalctl -u disco -f
 ```
 
 ## Troubleshooting
@@ -217,18 +212,18 @@ sudo journalctl -u disco daemon -f
 ### No Hosts Discovered
 
 **Possible causes:**
-1. Firewall blocking UDP port 5353
+1. Firewall blocking UDP port 5354
 2. Different broadcast addresses
 3. Discovery disabled in config
 
 **Solutions:**
 ```bash
 # Check firewall
-sudo iptables -L | grep 5353
-sudo firewall-cmd --list-ports | grep 5353
+sudo iptables -L | grep 5354
+sudo firewall-cmd --list-ports | grep 5354
 
 # Check config
-sudo disco config-validate /etc/disco daemon/config.yaml
+disco config validate /etc/disco/config.yaml
 
 # Enable discovery in config
 # discovery.enabled: true
@@ -250,7 +245,7 @@ sudo netstat -tlnp
 # In config: discovery.scan_interval: 10s
 
 # Restart daemon
-sudo systemctl restart disco daemon
+sudo systemctl restart disco
 ```
 
 ### NSS Module Not Working
@@ -264,13 +259,13 @@ sudo systemctl restart disco daemon
 **Solutions:**
 ```bash
 # Check NSS module installed
-ls -la /lib/x86_64-linux-gnu/libnss_daemon.so*
+ls -la /lib/x86_64-linux-gnu/libnss_disco.so*
 
 # Check nsswitch.conf
-grep daemon /etc/nsswitch.conf
+grep disco /etc/nsswitch.conf
 
 # Check library loaded
-ldconfig -p | grep nss_daemon
+ldconfig -p | grep nss_disco
 
 # Test with getent
 getent hosts localhost
@@ -294,15 +289,15 @@ Test with multiple hosts:
 
 ```bash
 # Start daemon
-./disco daemon -config config.yaml &
+sudo ./disco-daemon --config config.yaml &
 
 # Generate test traffic
 for i in {1..100}; do
-    ./disco query lookup host$i
+    ./disco lookup host$i
 done
 
 # Check metrics (if available)
-./disco query hosts | wc -l
+disco hosts | wc -l
 ```
 
 ### Memory Usage
@@ -311,10 +306,10 @@ Monitor daemon memory usage:
 
 ```bash
 # Start daemon
-./disco daemon -config config.yaml &
+sudo ./disco-daemon --config config.yaml &
 
 # Monitor memory
-watch -n 1 'ps aux | grep disco daemon'
+watch -n 1 'ps aux | grep disco-daemon'
 ```
 
 Expected: <20MB for typical deployment (50+ hosts)
@@ -361,8 +356,8 @@ Watch for these log entries:
 - [ ] Configuration validates
 - [ ] Daemon starts successfully
 - [ ] Socket is created
-- [ ] disco query hosts works
-- [ ] disco query services works
+- [ ] disco hosts works
+- [ ] disco services works
 - [ ] Self-host is discovered
 - [ ] Other hosts are discovered (multi-node)
 - [ ] Services are detected
@@ -391,7 +386,7 @@ For CI/CD pipelines:
   run: |
     docker-compose -f docker-compose.host.yml up -d
     sleep 60
-    docker exec disco daemon-web1 disco query hosts
+    docker exec disco-web1 disco hosts
     docker-compose down
 ```
 
@@ -400,6 +395,6 @@ For CI/CD pipelines:
 After passing tests:
 1. Deploy to production
 2. Monitor with journalctl
-3. Use disco query for diagnostics
+3. Use disco for diagnostics
 4. Adjust configuration based on network size
 5. Consider enabling security for production

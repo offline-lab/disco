@@ -126,7 +126,7 @@ func (c *Config) SetDefaults() {
 		c.Daemon.RecordTTL = 3600 * time.Second
 	}
 	if c.Network.BroadcastAddr == "" {
-		c.Network.BroadcastAddr = "255.255.255.255:5353"
+		c.Network.BroadcastAddr = "255.255.255.255:5354"
 	}
 	if c.Network.MaxBroadcastRate == 0 {
 		c.Network.MaxBroadcastRate = 10

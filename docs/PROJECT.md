@@ -1,8 +1,8 @@
 # Disco Daemon - Project Overview
 
-> **Status**: v1.0.0 Release Candidate
-> **Last Updated**: 2026-03-01
-> **Version**: 1.0.0-rc1
+> **Status**: v1.1.0
+> **Last Updated**: 2026-05-24
+> **Version**: 1.1.0
 
 ## Project Overview
 

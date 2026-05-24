@@ -173,13 +173,3 @@ func markLostHost(cmd *cobra.Command, args []string) {
 	fmt.Printf("Host marked as lost: %s\n", hostname)
 }
 
-func JoinStrings(strs []string, sep string) string {
-	result := ""
-	for i, s := range strs {
-		if i > 0 {
-			result += sep
-		}
-		result += s
-	}
-	return result
-}

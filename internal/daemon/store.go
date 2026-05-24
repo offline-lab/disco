@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -53,8 +55,7 @@ func (rs *RecordStore) Get(hostname string) (*nss.Record, bool) {
 		return record, true
 	}
 
-	rs.healthTracker.UpdateRecordStatus(record)
-	if record.Status == nss.StatusLost {
+	if rs.healthTracker.ComputeStatus(record) == nss.StatusLost {
 		return nil, false
 	}
 
@@ -76,8 +77,7 @@ func (rs *RecordStore) GetByAddr(addr string) (*nss.Record, bool) {
 			continue
 		}
 
-		rs.healthTracker.UpdateRecordStatus(record)
-		if record.Status == nss.StatusLost {
+		if rs.healthTracker.ComputeStatus(record) == nss.StatusLost {
 			continue
 		}
 
@@ -134,8 +134,7 @@ func (rs *RecordStore) List() []*nss.Record {
 			records = append(records, record)
 			continue
 		}
-		rs.healthTracker.UpdateRecordStatus(record)
-		if record.Status != nss.StatusLost {
+		if rs.healthTracker.ComputeStatus(record) != nss.StatusLost {
 			records = append(records, record)
 		}
 	}
@@ -144,8 +143,8 @@ func (rs *RecordStore) List() []*nss.Record {
 }
 
 func (rs *RecordStore) ListAll() []*nss.Record {
-	rs.mu.RLock()
-	defer rs.mu.RUnlock()
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
 
 	var records []*nss.Record
 	for _, record := range rs.records {
@@ -174,8 +173,8 @@ func (rs *RecordStore) Forget(hostname string) {
 }
 
 func (rs *RecordStore) GetAllRecords() []dnsserver.DNSRecord {
-	rs.mu.RLock()
-	defer rs.mu.RUnlock()
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
 
 	var records []dnsserver.DNSRecord
 	for _, record := range rs.records {
@@ -185,9 +184,17 @@ func (rs *RecordStore) GetAllRecords() []dnsserver.DNSRecord {
 		}
 
 		services := make(map[string]dnsserver.ServiceInfo)
-		for name, proto := range record.Services {
+		for name, svcValue := range record.Services {
+			host, portStr, err := net.SplitHostPort(svcValue)
+			if err != nil {
+				services[name] = dnsserver.ServiceInfo{Protocol: svcValue}
+				continue
+			}
+			port, _ := strconv.Atoi(portStr)
+			_ = host
 			services[name] = dnsserver.ServiceInfo{
-				Protocol: proto,
+				Port:     port,
+				Protocol: "tcp",
 			}
 		}
 

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -57,15 +58,20 @@ func (s *SocketServer) Start() error {
 		logging.Warn("Failed to set socket permissions", map[string]interface{}{"error": err.Error()})
 	}
 
+	go s.acceptLoop()
+	return nil
+}
+
+func (s *SocketServer) acceptLoop() {
 	for {
 		select {
 		case <-s.stopChan:
-			return nil
+			return
 		default:
-			if err := ln.(*net.UnixListener).SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+			if err := s.listener.(*net.UnixListener).SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
 				continue
 			}
-			conn, err := ln.Accept()
+			conn, err := s.listener.Accept()
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue
@@ -98,6 +104,10 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 		<-s.connSemaphore
 		s.wg.Done()
 	}()
+
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return
+	}
 
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
@@ -460,15 +470,18 @@ func (s *SocketServer) handleQueryListServices(query *nss.Query) *nss.Response {
 	services := make(map[string][]serviceHost)
 	for _, r := range records {
 		for svcName, svcAddr := range r.Services {
-			var addr string
-			var port int
-			if _, err := fmt.Sscanf(svcAddr, "%s:%d", &addr, &port); err != nil {
+			host, portStr, err := net.SplitHostPort(svcAddr)
+			if err != nil {
+				continue
+			}
+			port, err := strconv.Atoi(portStr)
+			if err != nil {
 				continue
 			}
 
 			services[svcName] = append(services[svcName], serviceHost{
 				Hostname: r.Hostname,
-				Address:  addr,
+				Address:  host,
 				Port:     port,
 			})
 		}
