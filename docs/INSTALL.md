@@ -83,15 +83,15 @@ Order matters:
 ### Step 4: Create Configuration Directory
 
 ```bash
-sudo mkdir -p /etc/disco-daemon
+sudo mkdir -p /etc/disco
 ```
 
 ### Step 5: Install Configuration
 
 ```bash
-sudo cp config.yaml /etc/disco-daemon/
+sudo cp config.yaml /etc/disco/
 # or create custom config:
-sudo vim /etc/disco-daemon/config.yaml
+sudo vim /etc/disco/config.yaml
 ```
 
 ### Step 6: Create Runtime Directory
@@ -113,7 +113,7 @@ daemon:
 
 network:
   interfaces: ["eth0", "wlan0"]
-  broadcast_addr: "255.255.255.255:5353"
+  broadcast_addr: "255.255.255.255:5354"
   max_broadcast_rate: 10
 
 discovery:
@@ -128,9 +128,8 @@ discovery:
 
 security:
   enabled: false
-  cert_path: "/etc/disco-daemon/cert.pem"
-  key_path: "/etc/disco-daemon/key.pem"
-  trusted_peers: "/etc/disco-daemon/trusted.pem"
+  key_path: "/etc/disco/keys.json"
+  trusted_peers: "/etc/disco/trusted.json"
   require_signed: false
 
 logging:
@@ -146,7 +145,7 @@ The daemon validates configuration on startup. Common issues:
 | Error | Solution |
 |-------|----------|
 | `socket_path must be absolute` | Use full path like `/run/disco.sock` |
-| `invalid broadcast_addr` | Format must be `host:port` like `255.255.255.255:5353` |
+| `invalid broadcast_addr` | Format must be `host:port` like `255.255.255.255:5354` |
 | `scan_interval must be at least 10 seconds` | Increase scan_interval |
 | `log_level invalid` | Use: debug, info, warn, error, fatal |
 
@@ -156,10 +155,10 @@ The daemon validates configuration on startup. Common issues:
 
 ```bash
 # Run directly
-sudo /usr/local/bin/disco-daemon -config /etc/disco-daemon/config.yaml
+sudo /usr/local/bin/disco-daemon -config /etc/disco/config.yaml
 
 # Or if in PATH
-sudo disco-daemon -config /etc/disco-daemon/config.yaml
+sudo disco-daemon -config /etc/disco/config.yaml
 ```
 
 ### systemd Service
@@ -172,7 +171,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/disco-daemon -config /etc/disco-daemon/config.yaml
+ExecStart=/usr/local/bin/disco-daemon -config /etc/disco/config.yaml
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -206,7 +205,7 @@ Create `/etc/init.d/disco-daemon`:
 ### END INIT INFO
 
 DAEMON=/usr/local/bin/disco-daemon
-CONFIG=/etc/disco-daemon/config.yaml
+CONFIG=/etc/disco/config.yaml
 PIDFILE=/var/run/disco-daemon.pid
 
 case "$1" in
@@ -251,14 +250,14 @@ ldconfig -p | grep libnss_disco
 
 ```bash
 cat /etc/nsswitch.conf | grep hosts
-# Should show: hosts: files daemon dns
+# Should show: hosts: files disco dns
 ```
 
 ### Test Socket Server
 
 ```bash
 # Start daemon (if not running)
-sudo disco-daemon -config /etc/disco-daemon/config.yaml &
+sudo disco-daemon -config /etc/disco/config.yaml &
 
 # Check socket exists
 ls -la /run/disco.sock
@@ -285,7 +284,7 @@ curl http://web1
 
 ```bash
 # Listen for broadcasts
-sudo tcpdump -i any -n udp port 5353
+sudo tcpdump -i any -n udp port 5354
 ```
 
 ## Troubleshooting
@@ -297,7 +296,7 @@ sudo tcpdump -i any -n udp port 5353
 ldconfig -p | grep libnss
 
 # Check library paths
-echo "/lib/x86_64-linux-gnu/" | sudo tee -a /etc/ld.so.conf.d/disco-daemon.conf
+echo "/lib/x86_64-linux-gnu/" | sudo tee -a /etc/ld.so.conf.d/disco.conf
 sudo ldconfig
 ```
 
@@ -335,11 +334,11 @@ nslookup <hostname>
 
 ```bash
 # Check firewall
-sudo iptables -L -n | grep 5353
+sudo iptables -L -n | grep 5354
 
 # Allow broadcast
-sudo iptables -I INPUT -p udp --dport 5353 -j ACCEPT
-sudo iptables -I OUTPUT -p udp --sport 5353 -j ACCEPT
+sudo iptables -I INPUT -p udp --dport 5354 -j ACCEPT
+sudo iptables -I OUTPUT -p udp --sport 5354 -j ACCEPT
 
 # Check MULTICAST on interface
 ip addr show eth0
@@ -350,14 +349,14 @@ ip addr show eth0
 
 ```bash
 # Check configuration validity
-disco-daemon -config /etc/disco-daemon/config.yaml -check
+disco config validate /etc/disco/config.yaml
 
 # Check logs
 journalctl -u disco-daemon -n 50
 tail -f /var/log/syslog | grep disco-daemon
 
 # Run in foreground to see errors
-sudo disco-daemon -config /etc/disco-daemon/config.yaml
+sudo disco-daemon -config /etc/disco/config.yaml
 ```
 
 ## Uninstallation
@@ -373,7 +372,7 @@ sudo systemctl disable disco-daemon
 sudo rm /usr/local/bin/disco-daemon
 
 # Remove configuration
-sudo rm -rf /etc/disco-daemon
+sudo rm -rf /etc/disco
 
 # Remove service file
 sudo rm /etc/systemd/system/disco-daemon.service
@@ -457,15 +456,15 @@ do_install() {
     install -m 0644 ${B}/libnss_disco.so.2 ${D}${libdir}/libnss_disco.so.2
     ln -sf libnss_disco.so.2 ${D}${libdir}/libnss_disco.so
 
-    install -d ${D}${sysconfdir}/disco-daemon
-    install -m 0644 ${B}/config.yaml ${D}${sysconfdir}/disco-daemon/config.yaml
+    install -d ${D}${sysconfdir}/disco
+    install -m 0644 ${B}/config.yaml ${D}${sysconfdir}/disco/config.yaml
     install -m 0644 ${WORKDIR}/nsswitch.conf ${D}${sysconfdir}/nsswitch.conf
 }
 
 FILES_${PN} += "${bindir}/disco-daemon \
                 ${libdir}/libnss_disco.so.2 \
                 ${libdir}/libnss_disco.so \
-                ${sysconfdir}/disco-daemon/config.yaml \
+                ${sysconfdir}/disco/config.yaml \
                 ${sysconfdir}/nsswitch.conf"
 ```
 
@@ -483,7 +482,7 @@ docker build -t disco-daemon .
 docker run --name disco-daemon \
   --network host \
   --cap-add=NET_ADMIN,NET_RAW \
-  -v /etc/disco-daemon:/etc/disco-daemon \
+  -v /etc/disco:/etc/disco:ro \
   disco-daemon
 ```
 

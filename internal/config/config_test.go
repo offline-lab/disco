@@ -21,7 +21,7 @@ func TestConfig_Validate_Daemon(t *testing.T) {
 					RecordTTL:         3600 * time.Second,
 				},
 				Network: NetworkConfig{
-					BroadcastAddr:    "255.255.255.255:5353",
+					BroadcastAddr:    "255.255.255.255:5354",
 					MaxBroadcastRate: 10,
 				},
 				Discovery: DiscoveryConfig{
@@ -102,7 +102,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 					RecordTTL:         3600 * time.Second,
 				},
 				Network: NetworkConfig{
-					BroadcastAddr:    "255.255.255.255:5353",
+					BroadcastAddr:    "255.255.255.255:5354",
 					MaxBroadcastRate: 10,
 				},
 			},
@@ -145,7 +145,7 @@ func TestConfig_Validate_Network(t *testing.T) {
 					RecordTTL:         3600 * time.Second,
 				},
 				Network: NetworkConfig{
-					BroadcastAddr:    "255.255.255.255:5353",
+					BroadcastAddr:    "255.255.255.255:5354",
 					MaxBroadcastRate: 0,
 				},
 			},
@@ -186,7 +186,7 @@ func TestConfig_Validate_Discovery(t *testing.T) {
 					},
 				},
 				Network: NetworkConfig{
-					BroadcastAddr:    "255.255.255.255:5353",
+					BroadcastAddr:    "255.255.255.255:5354",
 					MaxBroadcastRate: 10,
 				},
 			},
@@ -269,8 +269,8 @@ func TestConfig_SetDefaults(t *testing.T) {
 		t.Errorf("Expected default record TTL 3600s, got %v", cfg.Daemon.RecordTTL)
 	}
 
-	if cfg.Network.BroadcastAddr != "255.255.255.255:5353" {
-		t.Errorf("Expected default broadcast addr 255.255.255.255:5353, got %s", cfg.Network.BroadcastAddr)
+	if cfg.Network.BroadcastAddr != "255.255.255.255:5354" {
+		t.Errorf("Expected default broadcast addr 255.255.255.255:5354, got %s", cfg.Network.BroadcastAddr)
 	}
 
 	if cfg.Logging.Level != "info" {

@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-24
+
+### Fixed
+
+- **Daemon socket server blocked startup**: `Start()` blocked forever in accept loop,
+  preventing DNS server startup and graceful shutdown. Split into setup + goroutine.
+- **DNS server never resolved queries**: Domain suffix stripping was broken in all
+  handlers (A, TXT, CNAME). Rewrote with correct `HasSuffix`/`TrimSuffix` logic.
+- **DNS SRV query failed for single-label domains**: Minimum parts check was too
+  strict (`< 4` → `< 3`), rejecting valid queries like `_www._tcp.disco`.
+- **DNS server leaked on shutdown**: Only tracked one server instance. Now tracks all
+  bind-address servers and shuts them all down.
+- **Record store race condition**: `Get`, `GetByAddr`, `List` called status-mutating
+  `UpdateRecordStatus` under `RLock`. Changed to read-only `ComputeStatus`.
+- **Record store service port always zero**: `GetAllRecords` didn't parse "addr:port"
+  service values. Now uses `net.SplitHostPort` to populate `Port` and `Protocol`.
+- **Broadcast listener goroutine leak**: `WaitGroup` was local to `Start()`, so
+  `Stop()` couldn't wait for goroutines. Moved to struct field.
+- **Broadcast listener panic on stop**: `Stop()` closed channels before waiting for
+  goroutines, causing writes to closed channels. Reordered: close conns → wait → close chans.
+- **Unsigned time messages accepted when signing required**: Extra `keyManager != nil`
+  condition allowed unsigned messages through when no key manager was configured.
+- **Service reachability checker misidentified protocols**: `parseProtocol` treated IP
+  addresses as protocol names. Replaced with `net.SplitHostPort`-based parsing.
+- **Socket server missing connection deadline**: Added 5-second deadline to prevent
+  slow-client DoS on the Unix socket.
+- **Socket `handleQueryListServices` broken Sscanf**: Replaced `fmt.Sscanf` (which
+  can't parse "host:port") with `net.SplitHostPort` + `strconv.Atoi`.
+- **Default broadcast port inconsistency**: Config default was 5353 while all other
+  code used 5354. Fixed config default to 5354.
+- **Ping command default port**: Was 5353, fixed to 5354.
+
+### Changed
+
+- Removed dead duplicate `JoinStrings` function from hosts command
+- Removed redundant `--force` flag from `disco timeset` (command always forces)
+- Updated daemon help text to reference current `disco` subcommands
+
 ## [1.0.0] - 2025-03-01
 
 ### Added

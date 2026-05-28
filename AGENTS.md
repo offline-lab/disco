@@ -1,13 +1,14 @@
-# AGENTS.md - Coding Guidelines for NSS Daemon
+# AGENTS.md - Coding Guidelines for Disco
 
 ## Build, Test, and Lint Commands
 
 ### Building
 ```bash
-make                  # Build all binaries (nss-daemon, nss-query, nss-status, etc.)
+make                  # Build all binaries (disco-daemon, disco, libnss_disco.so.2)
 make clean           # Remove build artifacts
 make libnss          # Build NSS module (Linux with glibc only)
-go build -o nss-daemon cmd/daemon/main.go  # Build single binary
+go build -o disco-daemon cmd/daemon/main.go  # Build daemon binary
+go build -o disco cmd/disco/main.go          # Build CLI binary
 ```
 
 ### Testing
@@ -20,7 +21,7 @@ go test -v -run TestRecordStore ./internal/daemon/           # Run tests matchin
 
 ### Integration Testing
 ```bash
-test/nss-test.sh     # Multi-node integration test (requires running daemon)
+test/quick-test.sh   # Multi-node integration test (requires running daemon)
 ```
 
 ## Code Style Guidelines
@@ -40,7 +41,7 @@ import (
 
     "gopkg.in/yaml.v3"
 
-    "github.com/flip/nss-daemon/internal/nss"
+    "github.com/offline-lab/disco/internal/nss"
 )
 ```
 
@@ -159,11 +160,13 @@ func (rl *RateLimiter) Allow() bool {
 
 ## Key Dependencies
 - `gopkg.in/yaml.v3` - Configuration parsing
+- `github.com/miekg/dns` - DNS server
+- `github.com/spf13/cobra` - CLI framework
 - `golang.org/x/crypto` - Cryptographic functions (indirect)
 
 ## Important Notes
 - Go 1.22+ required
-- No DNS server - uses native NSS integration
+- Optional DNS server for `.disco` domain, plus native NSS integration
 - Target platform: Linux with glibc for NSS module
 - Daemon runs as systemd service typically
 - Use `go fmt` and run `make test` before committing

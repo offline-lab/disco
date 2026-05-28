@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/offline-lab/disco/cmd/disco/internal/cli"
@@ -69,9 +68,9 @@ func checkServices(cmd *cobra.Command, args []string) {
 
 	var checks []ServiceCheck
 	for _, h := range response.Hosts {
-		for svcName, proto := range h.Services {
-			port, protocol := parseProtocol(proto)
-			if port == 0 || protocol != "tcp" {
+		for svcName, svcValue := range h.Services {
+			port, _ := parseServiceAddr(svcValue)
+			if port == 0 {
 				continue
 			}
 
@@ -80,7 +79,7 @@ func checkServices(cmd *cobra.Command, args []string) {
 					Host:     h.Hostname,
 					Address:  addr,
 					Service:  svcName,
-					Protocol: protocol,
+					Protocol: "tcp",
 					Port:     port,
 				})
 			}
@@ -108,14 +107,16 @@ func checkServices(cmd *cobra.Command, args []string) {
 	printCheckResults(checks)
 }
 
-func parseProtocol(proto string) (port int, protocol string) {
-	parts := strings.SplitN(proto, ":", 2)
-	if len(parts) != 2 {
+func parseServiceAddr(svcValue string) (int, string) {
+	host, portStr, err := net.SplitHostPort(svcValue)
+	if err != nil {
 		return 0, ""
 	}
-	protocol = parts[0]
-	port, _ = strconv.Atoi(parts[1])
-	return port, protocol
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 0, ""
+	}
+	return port, host
 }
 
 func checkService(check *ServiceCheck) ServiceCheck {
