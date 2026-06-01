@@ -106,9 +106,9 @@ else
     echo "Configuration file already exists: $CONFIG_DIR/config.yaml"
 fi
 
-if [ -f "libnss/disco.service" ]; then
+if [ -f "debian/disco-daemon.service" ]; then
     echo "Installing systemd service..."
-    install -m 644 libnss/disco.service "$SYSTEMD_DIR/"
+    install -m 644 debian/disco-daemon.service "$SYSTEMD_DIR/disco.service"
     systemctl daemon-reload
     echo "Installed: $SYSTEMD_DIR/disco.service"
 else
