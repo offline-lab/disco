@@ -219,7 +219,7 @@ jobs:
         id: version
         run: |
           DATE=$(date +%Y%m%d)
-          COUNTER=$(git tag -l "0.${DATE}.*" 2>/dev/null | sed "s/0\.${DATE}.//" | sort -n | tail -1)
+          COUNTER=$(git tag -l "v0.${DATE}.*" 2>/dev/null | sed "s/v0\.${DATE}\.//" | sort -n | tail -1)
           if [ -z "$COUNTER" ]; then
             COUNTER=1
           else
