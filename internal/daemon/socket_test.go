@@ -208,3 +208,109 @@ func TestSocketServer_handleQuery_UnknownType(t *testing.T) {
 		t.Errorf("Expected ERROR, got %s", resp.Type)
 	}
 }
+
+func TestSocketServer_handleQueryByName_Alias(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"shop.local", "blog.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	for _, alias := range []string{"shop.local", "blog.local"} {
+		resp := server.handleQueryByName(&nss.Query{
+			Type:      nss.QueryByName,
+			Name:      alias,
+			RequestID: "alias-test",
+		})
+		if resp.Type != nss.ResponseOK {
+			t.Errorf("Get(%q): expected OK, got %s", alias, resp.Type)
+		}
+		if len(resp.Addrs) != 1 || resp.Addrs[0] != "192.168.1.10" {
+			t.Errorf("Get(%q): expected [192.168.1.10], got %v", alias, resp.Addrs)
+		}
+	}
+}
+
+func TestSocketServer_handleServiceAnnounce(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+
+	announced := make(map[string]struct{})
+	server.SetAnnounceService(func(name string, port int, aliases []string) error {
+		announced[name] = struct{}{}
+		return nil
+	})
+
+	resp := server.handleServiceAnnounce(&nss.Query{
+		Type:      nss.ServiceAnnounce,
+		Name:      "myapp",
+		Port:      8080,
+		Aliases:   []string{"myapp.local"},
+		RequestID: "svc-001",
+	})
+
+	if resp.Type != nss.ResponseOK {
+		t.Errorf("Expected OK, got %s: %s", resp.Type, resp.Error)
+	}
+	if resp.Name != "myapp" {
+		t.Errorf("Expected name myapp, got %s", resp.Name)
+	}
+	if _, ok := announced["myapp"]; !ok {
+		t.Error("AnnounceService callback was not called")
+	}
+}
+
+func TestSocketServer_handleServiceAnnounce_MissingName(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetAnnounceService(func(name string, port int, aliases []string) error { return nil })
+
+	resp := server.handleServiceAnnounce(&nss.Query{
+		Type:      nss.ServiceAnnounce,
+		Port:      8080,
+		RequestID: "svc-002",
+	})
+
+	if resp.Type != nss.ResponseError {
+		t.Errorf("Expected ERROR for missing name, got %s", resp.Type)
+	}
+}
+
+func TestSocketServer_handleServiceAnnounce_InvalidPort(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetAnnounceService(func(name string, port int, aliases []string) error { return nil })
+
+	resp := server.handleServiceAnnounce(&nss.Query{
+		Type:      nss.ServiceAnnounce,
+		Name:      "myapp",
+		Port:      0,
+		RequestID: "svc-003",
+	})
+
+	if resp.Type != nss.ResponseError {
+		t.Errorf("Expected ERROR for invalid port, got %s", resp.Type)
+	}
+}
+
+func TestSocketServer_handleServiceAnnounce_NoCallback(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+	// no SetAnnounceService called
+
+	resp := server.handleServiceAnnounce(&nss.Query{
+		Type:      nss.ServiceAnnounce,
+		Name:      "myapp",
+		Port:      8080,
+		RequestID: "svc-004",
+	})
+
+	if resp.Type != nss.ResponseError {
+		t.Errorf("Expected ERROR when no callback set, got %s", resp.Type)
+	}
+}

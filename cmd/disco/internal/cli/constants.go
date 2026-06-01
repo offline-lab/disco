@@ -4,7 +4,7 @@ import "time"
 
 const (
 	// Socket and paths
-	DefaultSocketPath = "/run/disco.sock"
+	DefaultSocketPath = "/run/disco/disco.sock"
 	DefaultConfigPath = "/etc/disco/config.yaml"
 	DefaultKeysPath   = "/etc/disco/keys.json"
 

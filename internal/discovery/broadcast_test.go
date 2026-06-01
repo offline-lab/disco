@@ -90,6 +90,84 @@ func TestServiceInfo_Fields(t *testing.T) {
 	}
 }
 
+func TestServiceInfo_Aliases_MarshalRoundtrip(t *testing.T) {
+	svc := ServiceInfo{
+		Name:    "http",
+		Port:    80,
+		Addr:    "192.168.1.1",
+		Aliases: []string{"shop.local", "blog.local"},
+	}
+
+	data, err := json.Marshal(svc)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded ServiceInfo
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if len(decoded.Aliases) != 2 {
+		t.Fatalf("Expected 2 aliases, got %d", len(decoded.Aliases))
+	}
+	if decoded.Aliases[0] != "shop.local" || decoded.Aliases[1] != "blog.local" {
+		t.Errorf("Aliases = %v, want [shop.local blog.local]", decoded.Aliases)
+	}
+}
+
+func TestServiceInfo_Aliases_OmitEmpty(t *testing.T) {
+	svc := ServiceInfo{Name: "ssh", Port: 22, Addr: "192.168.1.1"}
+
+	data, err := json.Marshal(svc)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	if string(data) != `{"name":"ssh","port":22,"addr":"192.168.1.1"}` {
+		// aliases field must be absent when nil
+		var m map[string]interface{}
+		_ = json.Unmarshal(data, &m)
+		if _, ok := m["aliases"]; ok {
+			t.Error("aliases field present in JSON when it should be omitted")
+		}
+	}
+}
+
+func TestBroadcastMessage_ServiceAliases_Roundtrip(t *testing.T) {
+	msg := &BroadcastMessage{
+		Type:      MessageAnnounce,
+		MessageID: "test-aliases",
+		Timestamp: 1000,
+		Hostname:  "web.local",
+		IPs:       []string{"192.168.1.1"},
+		Services: []ServiceInfo{
+			{Name: "http", Port: 80, Addr: "192.168.1.1", Aliases: []string{"shop.local", "api.local"}},
+		},
+		TTL: 3600,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded BroadcastMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if len(decoded.Services) != 1 {
+		t.Fatalf("Expected 1 service, got %d", len(decoded.Services))
+	}
+	if len(decoded.Services[0].Aliases) != 2 {
+		t.Fatalf("Expected 2 aliases, got %d", len(decoded.Services[0].Aliases))
+	}
+	if decoded.Services[0].Aliases[0] != "shop.local" {
+		t.Errorf("First alias = %q, want shop.local", decoded.Services[0].Aliases[0])
+	}
+}
+
 func TestClockInfo_Fields(t *testing.T) {
 	ci := ClockInfo{
 		Stratum:        1,

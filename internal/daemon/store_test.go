@@ -321,6 +321,102 @@ func TestRecordStore_RecordWithAliases(t *testing.T) {
 	}
 }
 
+func TestRecordStore_AliasLookup(t *testing.T) {
+	store := newTestStore(3600 * time.Second)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"shop.local", "blog.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	for _, alias := range []string{"shop.local", "blog.local"} {
+		r, ok := store.Get(alias)
+		if !ok {
+			t.Fatalf("Get(%q) returned false, want true", alias)
+		}
+		if r.Hostname != "web.local" {
+			t.Errorf("Get(%q).Hostname = %q, want web.local", alias, r.Hostname)
+		}
+		if len(r.Addresses) != 1 || r.Addresses[0] != "192.168.1.10" {
+			t.Errorf("Get(%q).Addresses = %v, want [192.168.1.10]", alias, r.Addresses)
+		}
+	}
+}
+
+func TestRecordStore_AliasCleanupOnDelete(t *testing.T) {
+	store := newTestStore(3600 * time.Second)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"shop.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	store.Delete("web.local")
+
+	_, ok := store.Get("shop.local")
+	if ok {
+		t.Error("alias still resolves after canonical record was deleted")
+	}
+}
+
+func TestRecordStore_AliasCleanupOnForget(t *testing.T) {
+	store := newTestStore(3600 * time.Second)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"shop.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	store.Forget("web.local")
+
+	_, ok := store.Get("shop.local")
+	if ok {
+		t.Error("alias still resolves after record was forgotten")
+	}
+}
+
+func TestRecordStore_AliasReplacedOnUpdate(t *testing.T) {
+	store := newTestStore(3600 * time.Second)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"old.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "web.local",
+		Aliases:   []string{"new.local"},
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	_, ok := store.Get("old.local")
+	if ok {
+		t.Error("old alias still resolves after record was updated with new aliases")
+	}
+
+	r, ok := store.Get("new.local")
+	if !ok {
+		t.Fatal("new alias not found after update")
+	}
+	if r.Hostname != "web.local" {
+		t.Errorf("new alias resolves to %q, want web.local", r.Hostname)
+	}
+}
+
 func TestRecordStore_DefaultTTL(t *testing.T) {
 	store := newTestStore(7200 * time.Second)
 

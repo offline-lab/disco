@@ -16,6 +16,7 @@ type RecordProvider interface {
 
 type DNSRecord struct {
 	Hostname  string
+	Aliases   []string
 	Addresses []string
 	Services  map[string]ServiceInfo
 	Status    string
@@ -144,25 +145,32 @@ func (s *Server) handleAQuery(q dns.Question, m *dns.Msg, domain string) {
 
 	records := s.provider.GetAllRecords()
 	for _, rec := range records {
-		if rec.Hostname == name {
+		matched := rec.Hostname == name
+		if !matched {
+			for _, alias := range rec.Aliases {
+				if alias == name {
+					matched = true
+					break
+				}
+			}
+		}
+		if matched {
 			ttl := s.getTTL(rec.Status)
 			for _, addr := range rec.Addresses {
 				ip := net.ParseIP(addr)
-				if ip == nil {
+				if ip == nil || ip.To4() == nil {
 					continue
 				}
-				if ip.To4() != nil {
-					rr := &dns.A{
-						Hdr: dns.RR_Header{
-							Name:   q.Name,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    uint32(ttl),
-						},
-						A: ip,
-					}
-					m.Answer = append(m.Answer, rr)
+				rr := &dns.A{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+						Ttl:    uint32(ttl),
+					},
+					A: ip,
 				}
+				m.Answer = append(m.Answer, rr)
 			}
 			return
 		}

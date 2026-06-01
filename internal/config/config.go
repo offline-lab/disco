@@ -19,6 +19,14 @@ type Config struct {
 	Health      HealthConfig          `yaml:"health"`
 	DNS         DNSConfig             `yaml:"dns"`
 	StaticHosts map[string]StaticHost `yaml:"static_hosts"`
+	Services    []ServiceConfig       `yaml:"services"`
+}
+
+// ServiceConfig declares a service this host advertises, with optional aliases.
+type ServiceConfig struct {
+	Name    string   `yaml:"name"`
+	Port    int      `yaml:"port"`
+	Aliases []string `yaml:"aliases,omitempty"`
 }
 
 // DaemonConfig contains daemon-specific configuration
@@ -117,7 +125,7 @@ func Load(path string) (*Config, error) {
 // SetDefaults sets default values for configuration
 func (c *Config) SetDefaults() {
 	if c.Daemon.SocketPath == "" {
-		c.Daemon.SocketPath = "/run/disco.sock"
+		c.Daemon.SocketPath = "/run/disco/disco.sock"
 	}
 	if c.Daemon.BroadcastInterval == 0 {
 		c.Daemon.BroadcastInterval = 30 * time.Second

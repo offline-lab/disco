@@ -5,20 +5,22 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
 User=disco
 Group=disco
 ExecStart=/usr/bin/disco-daemon -config /etc/disco/config.yaml
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
+RuntimeDirectory=disco
+RuntimeDirectoryMode=0755
 
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/disco /run
+ReadWritePaths=/var/lib/disco /run/disco
 
 [Install]
 WantedBy=multi-user.target

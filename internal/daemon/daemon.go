@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/offline-lab/disco/internal/discovery"
 	dnsserver "github.com/offline-lab/disco/internal/dns"
 	"github.com/offline-lab/disco/internal/logging"
+	"github.com/offline-lab/disco/internal/notify"
 	"github.com/offline-lab/disco/internal/nss"
 	"github.com/offline-lab/disco/internal/security"
 	"github.com/offline-lab/disco/internal/service"
@@ -19,15 +21,18 @@ import (
 )
 
 type Daemon struct {
-	config    *config.Config
-	store     *RecordStore
-	socket    *SocketServer
-	announcer *discovery.Announcer
-	listener  *discovery.Listener
-	detector  *service.Detector
-	timeSync  *timesync.TimeSyncService
-	dnsServer *dnsserver.Server
-	stopChan  chan struct{}
+	config          *config.Config
+	hostname        string
+	store           *RecordStore
+	socket          *SocketServer
+	announcer       *discovery.Announcer
+	listener        *discovery.Listener
+	detector        *service.Detector
+	timeSync        *timesync.TimeSyncService
+	dnsServer       *dnsserver.Server
+	stopChan        chan struct{}
+	dynamicServices []config.ServiceConfig
+	dynamicMu       sync.Mutex
 }
 
 // New creates a new daemon instance
@@ -55,6 +60,7 @@ func New(cfg *config.Config) (*Daemon, error) {
 
 	d := &Daemon{
 		config:   cfg,
+		hostname: hostname,
 		store:    store,
 		socket:   socket,
 		stopChan: make(chan struct{}),
@@ -145,6 +151,15 @@ func (d *Daemon) Run() error {
 	logging.Info("Starting disco-daemon", nil)
 
 	if d.announcer != nil {
+		for _, svc := range d.config.Services {
+			ips := d.announcer.GetLocalIPs()
+			addr := ""
+			if len(ips) > 0 {
+				addr = ips[0]
+			}
+			d.announcer.AddService(svc.Name, svc.Port, addr, svc.Aliases)
+		}
+
 		go d.announcer.Start(d.stopChan)
 		logging.Info("Announcer started", nil)
 	}
@@ -167,6 +182,8 @@ func (d *Daemon) Run() error {
 		logging.Info("Time sync service started", nil)
 	}
 
+	d.socket.SetAnnounceService(d.AnnounceService)
+
 	if err := d.socket.Start(); err != nil {
 		return fmt.Errorf("failed to start socket server: %w", err)
 	}
@@ -183,6 +200,10 @@ func (d *Daemon) Run() error {
 			})
 		}
 	}
+
+	d.selfRegister()
+	notify.Ready()
+	logging.Info("Daemon ready", nil)
 
 	d.waitForShutdown()
 
@@ -213,8 +234,15 @@ func (d *Daemon) handleDiscoveryMessage(msg *discovery.BroadcastMessage) {
 		Services:  make(map[string]string),
 	}
 
+	seen := make(map[string]bool)
 	for _, svc := range msg.Services {
 		record.Services[svc.Name] = fmt.Sprintf("%s:%d", svc.Addr, svc.Port)
+		for _, alias := range svc.Aliases {
+			if !seen[alias] {
+				record.Aliases = append(record.Aliases, alias)
+				seen[alias] = true
+			}
+		}
 	}
 
 	d.store.AddOrUpdate(record)
@@ -233,10 +261,75 @@ func (d *Daemon) updateServiceAnnouncements(stopChan chan struct{}) {
 		case <-ticker.C:
 			services := d.detector.GetServices()
 			for _, svc := range services {
-				d.announcer.AddService(svc.Name, svc.Port, svc.Addr)
+				d.announcer.AddService(svc.Name, svc.Port, svc.Addr, nil)
 			}
 		}
 	}
+}
+
+// selfRegister creates/updates the daemon's own record in the store so local aliases resolve immediately.
+func (d *Daemon) selfRegister() {
+	var ips []string
+	if d.announcer != nil {
+		ips = d.announcer.GetLocalIPs()
+	}
+
+	addr := ""
+	if len(ips) > 0 {
+		addr = ips[0]
+	}
+
+	record := &nss.Record{
+		Hostname:  d.hostname,
+		Addresses: ips,
+		Timestamp: time.Now().Unix(),
+		TTL:       int64(d.config.Daemon.RecordTTL.Seconds()),
+		Services:  make(map[string]string),
+	}
+
+	d.dynamicMu.Lock()
+	allServices := make([]config.ServiceConfig, len(d.config.Services), len(d.config.Services)+len(d.dynamicServices))
+	copy(allServices, d.config.Services)
+	allServices = append(allServices, d.dynamicServices...)
+	d.dynamicMu.Unlock()
+
+	seen := make(map[string]bool)
+	for _, svc := range allServices {
+		record.Services[svc.Name] = fmt.Sprintf("%s:%d", addr, svc.Port)
+		for _, alias := range svc.Aliases {
+			if !seen[alias] {
+				record.Aliases = append(record.Aliases, alias)
+				seen[alias] = true
+			}
+		}
+	}
+
+	d.store.AddOrUpdate(record)
+}
+
+// AnnounceService adds a service to the daemon's advertisements and triggers an immediate broadcast.
+func (d *Daemon) AnnounceService(name string, port int, aliases []string) error {
+	d.dynamicMu.Lock()
+	d.dynamicServices = append(d.dynamicServices, config.ServiceConfig{
+		Name:    name,
+		Port:    port,
+		Aliases: aliases,
+	})
+	d.dynamicMu.Unlock()
+
+	if d.announcer != nil {
+		ips := d.announcer.GetLocalIPs()
+		addr := ""
+		if len(ips) > 0 {
+			addr = ips[0]
+		}
+		d.announcer.AddService(name, port, addr, aliases)
+		d.announcer.BroadcastNow()
+	}
+
+	d.selfRegister()
+	logging.Info("Service announced", map[string]interface{}{"name": name, "port": port, "aliases": aliases})
+	return nil
 }
 
 // waitForShutdown waits for shutdown signal
@@ -245,6 +338,7 @@ func (d *Daemon) waitForShutdown() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	sig := <-sigChan
+	notify.Stopping()
 	logging.Info("Received signal, shutting down", map[string]interface{}{"signal": sig.String()})
 
 	close(d.stopChan)

@@ -9,7 +9,7 @@ import (
 type MessageType string
 
 const (
-	DefaultSocketPath = "/run/disco.sock"
+	DefaultSocketPath = "/run/disco/disco.sock"
 
 	QueryByName       MessageType = "QUERY_BY_NAME"
 	QueryByAddr       MessageType = "QUERY_BY_ADDR"
@@ -22,9 +22,10 @@ const (
 	HostsForget   MessageType = "HOSTS_FORGET"
 	HostsMarkLost MessageType = "HOSTS_MARK_LOST"
 
-	ServicesList   MessageType = "SERVICES_LIST"
-	ServicesShow   MessageType = "SERVICES_SHOW"
-	ServicesForget MessageType = "SERVICES_FORGET"
+	ServicesList    MessageType = "SERVICES_LIST"
+	ServicesShow    MessageType = "SERVICES_SHOW"
+	ServicesForget  MessageType = "SERVICES_FORGET"
+	ServiceAnnounce MessageType = "SERVICE_ANNOUNCE"
 
 	ResponseOK       MessageType = "OK"
 	ResponseNotFound MessageType = "NOTFOUND"
@@ -37,6 +38,8 @@ type Query struct {
 	Name      string      `json:"name,omitempty"`
 	Addr      string      `json:"addr,omitempty"`
 	Family    int         `json:"family,omitempty"`
+	Port      int         `json:"port,omitempty"`
+	Aliases   []string    `json:"aliases,omitempty"`
 	RequestID string      `json:"request_id"`
 }
 
@@ -70,6 +73,7 @@ type ServiceHealth struct {
 	Protocol string   `json:"protocol"`
 	Port     int      `json:"port"`
 	Hosts    []string `json:"hosts"`
+	Aliases  []string `json:"aliases,omitempty"`
 	Status   string   `json:"status"`
 }
 

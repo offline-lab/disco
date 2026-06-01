@@ -32,9 +32,10 @@ type BroadcastMessage struct {
 }
 
 type ServiceInfo struct {
-	Name string `json:"name"`
-	Port int    `json:"port"`
-	Addr string `json:"addr"`
+	Name    string   `json:"name"`
+	Port    int      `json:"port"`
+	Addr    string   `json:"addr"`
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 type ClockInfo struct {
@@ -69,6 +70,7 @@ type Announcer struct {
 	cachedBroadcastAddr *net.UDPAddr
 	cachedPort          string
 	ifaceFilter         map[string]bool
+	ifaceMu             sync.Mutex
 	ifaceCache          []net.Interface
 	ifaceCacheTime      time.Time
 	ifaceCacheTTL       time.Duration
@@ -142,10 +144,18 @@ func (a *Announcer) Start(stopChan chan struct{}) {
 	}
 }
 
+func (a *Announcer) broadcastUnlimited() {
+	a.sendAnnouncement()
+}
+
 func (a *Announcer) broadcast() {
 	if !a.rateLimiter.Allow() {
 		return
 	}
+	a.sendAnnouncement()
+}
+
+func (a *Announcer) sendAnnouncement() {
 
 	msg := a.createAnnouncement()
 
@@ -195,6 +205,9 @@ func (a *Announcer) broadcast() {
 }
 
 func (a *Announcer) getCachedInterfaces() []net.Interface {
+	a.ifaceMu.Lock()
+	defer a.ifaceMu.Unlock()
+
 	now := time.Now()
 	if a.ifaceCache != nil && now.Sub(a.ifaceCacheTime) < a.ifaceCacheTTL {
 		return a.ifaceCache
@@ -307,14 +320,25 @@ func (a *Announcer) getLocalIPs() []string {
 	return ips
 }
 
-func (a *Announcer) AddService(name string, port int, addr string) {
+func (a *Announcer) AddService(name string, port int, addr string, aliases []string) {
 	a.servicesMu.Lock()
 	a.services[name] = ServiceInfo{
-		Name: name,
-		Port: port,
-		Addr: addr,
+		Name:    name,
+		Port:    port,
+		Addr:    addr,
+		Aliases: aliases,
 	}
 	a.servicesMu.Unlock()
+}
+
+// BroadcastNow sends an immediate announcement, bypassing the rate limiter.
+// Used for explicit user-triggered events (e.g. disco service add).
+func (a *Announcer) BroadcastNow() {
+	a.broadcastUnlimited()
+}
+
+func (a *Announcer) GetLocalIPs() []string {
+	return a.getLocalIPs()
 }
 
 func (a *Announcer) RemoveService(name string) {

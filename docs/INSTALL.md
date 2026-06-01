@@ -107,7 +107,7 @@ sudo chmod 1777 /run
 
 ```yaml
 daemon:
-  socket_path: "/run/disco.sock"
+  socket_path: "/run/disco/disco.sock"
   broadcast_interval: 30s
   record_ttl: 3600s
 
@@ -144,7 +144,7 @@ The daemon validates configuration on startup. Common issues:
 
 | Error | Solution |
 |-------|----------|
-| `socket_path must be absolute` | Use full path like `/run/disco.sock` |
+| `socket_path must be absolute` | Use full path like `/run/disco/disco.sock` |
 | `invalid broadcast_addr` | Format must be `host:port` like `255.255.255.255:5354` |
 | `scan_interval must be at least 10 seconds` | Increase scan_interval |
 | `log_level invalid` | Use: debug, info, warn, error, fatal |
@@ -170,16 +170,22 @@ Description=NSS Daemon for service discovery
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/local/bin/disco-daemon -config /etc/disco/config.yaml
 Restart=on-failure
 RestartSec=5
+RuntimeDirectory=disco
+RuntimeDirectoryMode=0755
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+`RuntimeDirectory=disco` creates `/run/disco/` before the daemon starts.
+`Type=notify` lets systemd track readiness via sd_notify — the daemon signals
+`READY=1` once the socket and DNS server are accepting connections.
 
 Enable and start:
 ```bash
@@ -260,10 +266,10 @@ cat /etc/nsswitch.conf | grep hosts
 sudo disco-daemon -config /etc/disco/config.yaml &
 
 # Check socket exists
-ls -la /run/disco.sock
+ls -la /run/disco/disco.sock
 
 # Test connectivity
-echo '{"type":"QUERY_BY_NAME","name":"test","request_id":"test-001"}' | nc -U /run/disco.sock
+echo '{"type":"QUERY_BY_NAME","name":"test","request_id":"test-001"}' | nc -U /run/disco/disco.sock
 ```
 
 ### Test Name Resolution
@@ -304,10 +310,10 @@ sudo ldconfig
 
 ```bash
 # Check permissions
-ls -la /run/disco.sock
+ls -la /run/disco/disco.sock
 
 # Remove old socket
-sudo rm /run/disco.sock
+sudo rm /run/disco/disco.sock
 
 # Check daemon is running
 ps aux | grep disco-daemon

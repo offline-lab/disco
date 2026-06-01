@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.20260601.1] - 2026-06-01
+
+### Added
+
+- **Service aliases**: hosts can advertise alias names per-service that resolve
+  via DNS and NSS to the same IP as the host. Declare statically in config:
+
+  ```yaml
+  services:
+    - name: http
+      port: 80
+      aliases: [shop.local, blog.local]
+  ```
+
+  Aliases are broadcast on the wire (included in message signatures), stored
+  in an alias index for O(1) lookup, and resolved by both the DNS server and
+  the NSS socket handler.
+
+- **`disco service add`**: new CLI command to advertise a service via the
+  running daemon at runtime, without a restart. Triggers an immediate broadcast.
+  Intended for `ExecStartPost=` in systemd portable service units:
+
+  ```
+  disco service add myapp 8080 --alias myapp.local
+  ```
+
+- **`--alias` flag on `disco announce`**: the manual UDP broadcast command now
+  accepts `--alias NAME` (repeatable) to include service aliases in ad-hoc
+  announcements.
+
+- **`--config` flag on `disco` CLI**: reads socket path from a config file,
+  falling back through `--socket` flag → `$DISCO_SOCKET` env var → config
+  file → compiled default.
+
+- **systemd sd_notify integration**: the daemon sends `READY=1` after all
+  subsystems are accepting connections, and `STOPPING=1` before graceful
+  shutdown. Requires `Type=notify` in the service unit.
+
+### Fixed
+
+- **Data race on interface cache**: `getCachedInterfaces()` read/wrote
+  `ifaceCache` and `ifaceCacheTime` without a lock. The ticker goroutine and
+  socket handler goroutines (via `AnnounceService → GetLocalIPs`) accessed
+  these fields concurrently. Added `ifaceMu sync.Mutex`.
+
+- **`debian/disco-daemon.service` missing `RuntimeDirectory`**: the Debian
+  package service file used `Type=simple` and had no `RuntimeDirectory=disco`
+  directive, so `/run/disco/` was never created and the daemon failed to bind
+  its socket on fresh installs. Now uses `Type=notify` with
+  `RuntimeDirectory=disco`.
+
+- **Self-registered services had no IP address**: `selfRegister` stored
+  services as `:port` (no host). `handleQueryListServices` parses service
+  values with `net.SplitHostPort`, so the local daemon's own services returned
+  an empty `Address` field while peer services had a real IP. Fixed to
+  `addr:port` using the first local interface address.
+
+- **`BroadcastNow` was silently rate-limited**: `AnnounceService` returned
+  success even when the rate limiter dropped the broadcast. Extracted
+  `sendAnnouncement()` from `broadcast()`; `BroadcastNow()` now calls it
+  directly, bypassing the token bucket.
+
+- **Slice aliasing in `selfRegister`**: `append(d.config.Services, d.dynamicServices...)`
+  could write into `d.config.Services`' backing array if it had spare capacity,
+  corrupting static config for future readers. Fixed with `make`+`copy`+`append`.
+
+- **`os.Hostname()` called on every `selfRegister` invocation**: the hostname
+  is immutable after startup. Now resolved once in `New()` and stored on the
+  `Daemon` struct; `selfRegister` uses `d.hostname`. Eliminates a per-call
+  syscall and prevents divergence between the announcer and store hostnames.
+
+- **Socket path default was hardcoded in flag registration**: `--socket` flag
+  defaulted to the constant, making the `$DISCO_SOCKET` env var check
+  unreachable. Default is now `""` so env var and config file are tried first.
+
+### Changed
+
+- Default socket path changed from `/run/disco.sock` to `/run/disco/disco.sock`.
+  The parent directory is created by systemd `RuntimeDirectory=disco`.
+
+- Alias-cleanup loop extracted to `removeAliasesForHost(hostname)` private
+  helper in the record store, replacing four identical inline loops in
+  `AddOrUpdate`, `Delete`, `Forget`, and `cleanupExpiredRecords`.
+
 ## [1.1.0] - 2026-05-24
 
 ### Fixed

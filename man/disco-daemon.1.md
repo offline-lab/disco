@@ -25,7 +25,7 @@ The daemon automatically discovers nodes via UDP broadcast, detects local servic
 The daemon reads configuration from a YAML file. Key settings include:
 
 **daemon**
-  socket_path: Path to Unix domain socket (default: /run/disco.sock)
+  socket_path: Path to Unix domain socket (default: /run/disco/disco.sock)
   broadcast_interval: Time between broadcasts (default: 30s)
   record_ttl: Time-to-live for cached records (default: 3600s)
 
@@ -39,6 +39,22 @@ The daemon reads configuration from a YAML file. Key settings include:
   detect_services: Auto-detect local services (default: true)
   service_port_mapping: Map service names to ports (e.g., www: [80, 443])
   scan_interval: Time between service scans (default: 60s)
+
+**services**
+  List of services this host statically advertises, with optional aliases.
+  Aliases are broadcast to all peers and resolve via DNS/NSS to this host's IP.
+
+  Example:
+
+    services:
+      - name: http
+        port: 80
+        aliases:
+          - shop.local
+          - blog.local
+
+  Services can also be added at runtime with `disco service add` without
+  restarting the daemon.
 
 **security**
   enabled: Enable message signing/verification (default: false)
@@ -63,11 +79,27 @@ Start with custom configuration:
 Run in foreground to see logs:
     disco-daemon --config /etc/disco/config.yaml
 
+## SYSTEMD INTEGRATION
+disco-daemon supports the systemd sd_notify protocol. When run under systemd
+with `Type=notify`, the daemon sends `READY=1` after all subsystems are
+accepting connections and `STOPPING=1` before beginning graceful shutdown.
+
+Minimal unit file:
+
+    [Service]
+    Type=notify
+    ExecStart=/usr/local/bin/disco-daemon --config /etc/disco/config.yaml
+    NotifyAccess=main
+    Restart=on-failure
+
+Without `Type=notify`, systemd treats the process as ready immediately on
+start regardless of the notify calls.
+
 ## FILES
 /etc/disco/config.yaml
     Default configuration file
 
-/run/disco.sock
+/run/disco/disco.sock
     Unix domain socket for NSS module queries
 
 /lib/x86_64-linux-gnu/libnss_disco.so.2

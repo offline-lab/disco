@@ -14,6 +14,7 @@ import (
 type RecordStore struct {
 	mu            sync.RWMutex
 	records       map[string]*nss.Record
+	aliasIndex    map[string]string // alias -> canonical hostname
 	ttl           time.Duration
 	healthConfig  *config.HealthConfig
 	healthTracker *HealthTracker
@@ -23,6 +24,7 @@ type RecordStore struct {
 func NewRecordStore(ttl time.Duration, healthCfg *config.HealthConfig, staticHosts map[string]config.StaticHost) *RecordStore {
 	rs := &RecordStore{
 		records:       make(map[string]*nss.Record),
+		aliasIndex:    make(map[string]string),
 		ttl:           ttl,
 		healthConfig:  healthCfg,
 		healthTracker: NewHealthTracker(healthCfg, staticHosts),
@@ -31,6 +33,9 @@ func NewRecordStore(ttl time.Duration, healthCfg *config.HealthConfig, staticHos
 
 	for hostname, record := range rs.healthTracker.GetStaticHosts() {
 		rs.records[hostname] = record
+		for _, alias := range record.Aliases {
+			rs.aliasIndex[alias] = hostname
+		}
 	}
 
 	go rs.cleanupExpiredRecords()
@@ -42,11 +47,26 @@ func (rs *RecordStore) Stop() {
 	close(rs.stopChan)
 }
 
+// removeAliasesForHost removes all alias index entries pointing at hostname.
+// Must be called with rs.mu held.
+func (rs *RecordStore) removeAliasesForHost(hostname string) {
+	for alias, h := range rs.aliasIndex {
+		if h == hostname {
+			delete(rs.aliasIndex, alias)
+		}
+	}
+}
+
 func (rs *RecordStore) Get(hostname string) (*nss.Record, bool) {
 	rs.mu.RLock()
 	defer rs.mu.RUnlock()
 
 	record, exists := rs.records[hostname]
+	if !exists {
+		if canonical, ok := rs.aliasIndex[hostname]; ok {
+			record, exists = rs.records[canonical]
+		}
+	}
 	if !exists {
 		return nil, false
 	}
@@ -106,6 +126,7 @@ func (rs *RecordStore) AddOrUpdate(record *nss.Record) {
 	now := time.Now().Unix()
 	if existing, exists := rs.records[record.Hostname]; exists {
 		record.FirstSeen = existing.FirstSeen
+		rs.removeAliasesForHost(record.Hostname)
 	} else {
 		record.FirstSeen = now
 	}
@@ -114,12 +135,16 @@ func (rs *RecordStore) AddOrUpdate(record *nss.Record) {
 	rs.healthTracker.UpdateRecordStatus(record)
 
 	rs.records[record.Hostname] = record
+	for _, alias := range record.Aliases {
+		rs.aliasIndex[alias] = record.Hostname
+	}
 }
 
 // Delete removes a record
 func (rs *RecordStore) Delete(hostname string) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
+	rs.removeAliasesForHost(hostname)
 	delete(rs.records, hostname)
 }
 
@@ -168,6 +193,7 @@ func (rs *RecordStore) Forget(hostname string) {
 	defer rs.mu.Unlock()
 
 	if record, exists := rs.records[hostname]; exists && !record.IsStatic {
+		rs.removeAliasesForHost(hostname)
 		delete(rs.records, hostname)
 	}
 }
@@ -200,6 +226,7 @@ func (rs *RecordStore) GetAllRecords() []dnsserver.DNSRecord {
 
 		records = append(records, dnsserver.DNSRecord{
 			Hostname:  record.Hostname,
+			Aliases:   record.Aliases,
 			Addresses: record.Addresses,
 			Services:  services,
 			Status:    string(record.Status),
@@ -226,6 +253,7 @@ func (rs *RecordStore) cleanupExpiredRecords() {
 			rs.mu.Lock()
 			for hostname, record := range rs.records {
 				if rs.healthTracker.ShouldExpire(record) {
+					rs.removeAliasesForHost(hostname)
 					delete(rs.records, hostname)
 				} else {
 					rs.healthTracker.UpdateRecordStatus(record)

@@ -340,3 +340,40 @@ func TestAuthoritative(t *testing.T) {
 		t.Error("expected authoritative response")
 	}
 }
+
+func TestHandleAQuery_Alias(t *testing.T) {
+	records := []DNSRecord{
+		{
+			Hostname:  "web.local",
+			Aliases:   []string{"shop.local", "blog.local"},
+			Addresses: []string{"192.168.1.10"},
+			Services:  map[string]ServiceInfo{"http": {Port: 80, Protocol: "tcp"}},
+			Status:    "healthy",
+			LastSeen:  time.Now(),
+		},
+	}
+	s := testServer(records)
+
+	for _, alias := range []string{"shop.local", "blog.local"} {
+		resp := queryServer(s, alias+".disco.", dns.TypeA)
+		if len(resp.Answer) != 1 {
+			t.Fatalf("alias %q: expected 1 A record, got %d", alias, len(resp.Answer))
+		}
+		a, ok := resp.Answer[0].(*dns.A)
+		if !ok {
+			t.Fatalf("alias %q: expected *dns.A, got %T", alias, resp.Answer[0])
+		}
+		if a.A.String() != "192.168.1.10" {
+			t.Errorf("alias %q: expected 192.168.1.10, got %s", alias, a.A.String())
+		}
+	}
+}
+
+func TestHandleAQuery_AliasNotFound(t *testing.T) {
+	s := testServer(testRecords())
+
+	resp := queryServer(s, "noalias.disco.", dns.TypeA)
+	if len(resp.Answer) != 0 {
+		t.Errorf("expected 0 answers for non-existent alias, got %d", len(resp.Answer))
+	}
+}
