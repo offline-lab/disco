@@ -89,9 +89,9 @@ info "Broadcast: $BROADCAST"
 
 info "Creating daemon configs..."
 for node in $NODES; do
-    docker exec $node bash -c "mkdir -p /etc/disco /run && cat > /etc/disco/config.yaml << EOF
+    docker exec $node bash -c "mkdir -p /etc/disco /run/disco && cat > /etc/disco/config.yaml << EOF
 daemon:
-  socket_path: /run/disco.sock
+  socket_path: /run/disco/disco.sock
   broadcast_interval: 5s
   record_ttl: 60s
 
