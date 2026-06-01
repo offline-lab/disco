@@ -118,7 +118,7 @@ else
 fi
 
 info "Testing 'disco ping' (requires target)..."
-PING_OUTPUT=$("$CLI" -s "$SOCKET" ping -c 1 localhost 2>&1) || true
+PING_OUTPUT=$("$CLI" -s "$SOCKET" ping -n 1 localhost 2>&1) || true
 if echo "$PING_OUTPUT" | grep -qiE "results|success|down|unreachable"; then
     pass "disco ping works (no daemon to ping, but command works)"
 else

@@ -257,8 +257,8 @@ func TestConfig_SetDefaults(t *testing.T) {
 
 	cfg.SetDefaults()
 
-	if cfg.Daemon.SocketPath != "/run/disco.sock" {
-		t.Errorf("Expected default socket path /run/disco.sock, got %s", cfg.Daemon.SocketPath)
+	if cfg.Daemon.SocketPath != "/run/disco/disco.sock" {
+		t.Errorf("Expected default socket path /run/disco/disco.sock, got %s", cfg.Daemon.SocketPath)
 	}
 
 	if cfg.Daemon.BroadcastInterval != 30*time.Second {
@@ -339,5 +339,52 @@ daemon:
 	_, err := Load(tmpFile)
 	if err == nil {
 		t.Error("Load() expected error for invalid YAML")
+	}
+}
+
+func TestLoad_ServicesWithAliases(t *testing.T) {
+	content := `
+services:
+  - name: http
+    port: 80
+    aliases:
+      - shop.local
+      - blog.local
+  - name: ssh
+    port: 22
+`
+	tmpFile := "/tmp/test-services.yaml"
+	defer os.Remove(tmpFile) //nolint:errcheck
+
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if len(cfg.Services) != 2 {
+		t.Fatalf("Expected 2 services, got %d", len(cfg.Services))
+	}
+
+	http := cfg.Services[0]
+	if http.Name != "http" {
+		t.Errorf("Services[0].Name = %q, want http", http.Name)
+	}
+	if http.Port != 80 {
+		t.Errorf("Services[0].Port = %d, want 80", http.Port)
+	}
+	if len(http.Aliases) != 2 || http.Aliases[0] != "shop.local" || http.Aliases[1] != "blog.local" {
+		t.Errorf("Services[0].Aliases = %v, want [shop.local blog.local]", http.Aliases)
+	}
+
+	ssh := cfg.Services[1]
+	if ssh.Name != "ssh" || ssh.Port != 22 {
+		t.Errorf("Services[1] = {%s %d}, want {ssh 22}", ssh.Name, ssh.Port)
+	}
+	if len(ssh.Aliases) != 0 {
+		t.Errorf("Services[1].Aliases = %v, want empty", ssh.Aliases)
 	}
 }

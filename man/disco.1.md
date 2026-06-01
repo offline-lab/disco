@@ -11,7 +11,7 @@ disco is the unified command-line interface for managing and querying the disco-
 
 ## GLOBAL OPTIONS
 \-\-socket PATH
-    Path to Unix domain socket (default: /run/disco.sock)
+    Path to Unix domain socket (default: /run/disco/disco.sock)
 
 \-\-json
     Output in JSON format
@@ -43,6 +43,17 @@ services
 
 services show <service>
     Show detailed information about a specific service
+
+### Service Advertisement
+service add <name> <port>
+    Tell the running daemon to advertise a new service on this host.
+    The daemon updates its store, broadcasts immediately, and includes
+    the service in all future announcements.
+    Options:
+        \-\-alias NAME    Alias name(s) for this service (repeatable)
+
+    Intended for use in systemd portable service units:
+        ExecStartPost=disco service add myapp 8080 --alias myapp.local
 
 ### Name Resolution
 lookup <hostname>
@@ -90,7 +101,7 @@ ping <hostname>
 
 ### Manual Announcements
 announce
-    Send manual discovery broadcast announcements
+    Send manual discovery broadcast announcements via UDP.
     Options:
         \-\-hostname NAME   Hostname to announce (required)
         \-\-addr ADDR       Broadcast address (default: 255.255.255.255:5354)
@@ -98,6 +109,7 @@ announce
         \-\-count N         Number of announcements (0 = unlimited)
         \-\-service NAME    Service name to announce
         \-\-port PORT       Service port (requires \-\-service)
+        \-\-alias NAME      Service alias(es) (requires \-\-service, repeatable)
 
 ## OUTPUT FORMATS
 By default, disco outputs human-readable text with colors. Use \-\-json for machine-readable output.
@@ -150,11 +162,20 @@ Send manual announcement:
 Announce with service:
     disco announce --hostname mail1 --service smtp --port 25
 
+Announce with service aliases:
+    disco announce --hostname web1 --service http --port 80 --alias shop.local --alias blog.local
+
+Tell the running daemon to advertise a new service:
+    disco service add myapp 8080
+
+Tell the running daemon to advertise a service with aliases:
+    disco service add http 80 --alias shop.local --alias blog.local
+
 Start daemon in foreground:
     disco start --config /etc/disco/config.yaml --foreground
 
 ## FILES
-/run/disco.sock
+/run/disco/disco.sock
     Unix domain socket for daemon communication
 
 /etc/disco/config.yaml

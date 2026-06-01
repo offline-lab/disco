@@ -34,7 +34,7 @@ func init() {
 	rootCmd.AddCommand(pingCmd)
 
 	pingCmd.Flags().IntVarP(&pingPort, "port", "p", 5354, "Target port")
-	pingCmd.Flags().IntVarP(&pingCount, "count", "c", 4, "Number of pings (1-10)")
+	pingCmd.Flags().IntVarP(&pingCount, "count", "n", 4, "Number of pings (1-10)")
 	pingCmd.Flags().DurationVarP(&pingInterval, "interval", "i", 1*time.Second, "Time between pings (min 100ms)")
 	pingCmd.Flags().BoolVarP(&pingVerbose, "verbose", "v", false, "Verbose output")
 }

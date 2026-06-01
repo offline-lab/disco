@@ -21,6 +21,7 @@ var (
 	announceCount    int
 	announcePort     int
 	announceService  string
+	announceAliases  []string
 )
 
 var announceCmd = &cobra.Command{
@@ -39,9 +40,10 @@ func init() {
 	announceCmd.Flags().StringVarP(&announceHostname, "hostname", "n", "", "Hostname to announce (required)")
 	announceCmd.Flags().StringVarP(&announceAddr, "addr", "a", "255.255.255.255:5354", "Broadcast address (host:port)")
 	announceCmd.Flags().DurationVarP(&announceInterval, "interval", "i", 5*time.Second, "Announcement interval")
-	announceCmd.Flags().IntVarP(&announceCount, "count", "c", 0, "Number of announcements (0 = unlimited)")
+	announceCmd.Flags().IntVar(&announceCount, "count", 0, "Number of announcements (0 = unlimited)")
 	announceCmd.Flags().IntVarP(&announcePort, "port", "p", 0, "Service port (requires --service)")
 	announceCmd.Flags().StringVarP(&announceService, "service", "S", "", "Service name to announce")
+	announceCmd.Flags().StringArrayVarP(&announceAliases, "alias", "A", nil, "Service alias(es) (requires --service)")
 
 	if err := announceCmd.MarkFlagRequired("hostname"); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to mark hostname flag as required: %v\n", err)
@@ -112,8 +114,9 @@ func buildServices() []discovery.ServiceInfo {
 	var services []discovery.ServiceInfo
 	if announceService != "" && announcePort > 0 {
 		services = append(services, discovery.ServiceInfo{
-			Name: announceService,
-			Port: announcePort,
+			Name:    announceService,
+			Port:    announcePort,
+			Aliases: announceAliases,
 		})
 	}
 	return services

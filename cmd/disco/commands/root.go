@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/offline-lab/disco/cmd/disco/internal/cli"
+	"github.com/offline-lab/disco/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var (
 	socketPath string
+	configPath string
 	outputJSON bool
 )
 
@@ -27,7 +29,8 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", cli.DefaultSocketPath, "Path to daemon socket")
+	rootCmd.PersistentFlags().StringVarP(&socketPath, "socket", "s", "", "Path to daemon socket")
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
 	rootCmd.PersistentFlags().BoolVarP(&outputJSON, "json", "j", false, "Output in JSON format")
 }
 
@@ -37,6 +40,11 @@ func getSocketPath() string {
 	}
 	if env := os.Getenv("DISCO_SOCKET"); env != "" {
 		return env
+	}
+	if configPath != "" {
+		if cfg, err := config.Load(configPath); err == nil && cfg.Daemon.SocketPath != "" {
+			return cfg.Daemon.SocketPath
+		}
 	}
 	return cli.DefaultSocketPath
 }

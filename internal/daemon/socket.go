@@ -18,13 +18,14 @@ import (
 const maxConnections = 100
 
 type SocketServer struct {
-	socketPath    string
-	store         *RecordStore
-	timeSync      *timesync.TimeSyncService
-	listener      net.Listener
-	connSemaphore chan struct{}
-	stopChan      chan struct{}
-	wg            sync.WaitGroup
+	socketPath      string
+	store           *RecordStore
+	timeSync        *timesync.TimeSyncService
+	announceService func(name string, port int, aliases []string) error
+	listener        net.Listener
+	connSemaphore   chan struct{}
+	stopChan        chan struct{}
+	wg              sync.WaitGroup
 }
 
 func NewSocketServer(socketPath string, store *RecordStore) *SocketServer {
@@ -38,6 +39,10 @@ func NewSocketServer(socketPath string, store *RecordStore) *SocketServer {
 
 func (s *SocketServer) SetTimeSync(ts *timesync.TimeSyncService) {
 	s.timeSync = ts
+}
+
+func (s *SocketServer) SetAnnounceService(fn func(name string, port int, aliases []string) error) {
+	s.announceService = fn
 }
 
 func (s *SocketServer) Start() error {
@@ -153,6 +158,8 @@ func (s *SocketServer) handleQuery(query *nss.Query) *nss.Response {
 		return s.handleServicesShow(query)
 	case nss.ServicesForget:
 		return s.handleServicesForget(query)
+	case nss.ServiceAnnounce:
+		return s.handleServiceAnnounce(query)
 	default:
 		return nss.NewErrorResponse(query.RequestID, "unknown query type")
 	}
@@ -386,6 +393,26 @@ func (s *SocketServer) handleServicesShow(query *nss.Query) *nss.Response {
 
 func (s *SocketServer) handleServicesForget(query *nss.Query) *nss.Response {
 	return nss.NewErrorResponse(query.RequestID, "not implemented: services are tied to hosts")
+}
+
+func (s *SocketServer) handleServiceAnnounce(query *nss.Query) *nss.Response {
+	if s.announceService == nil {
+		return nss.NewErrorResponse(query.RequestID, "service announcements not available")
+	}
+	if query.Name == "" {
+		return nss.NewErrorResponse(query.RequestID, "service name required")
+	}
+	if query.Port <= 0 || query.Port > 65535 {
+		return nss.NewErrorResponse(query.RequestID, "valid port required")
+	}
+	if err := s.announceService(query.Name, query.Port, query.Aliases); err != nil {
+		return nss.NewErrorResponse(query.RequestID, err.Error())
+	}
+	return &nss.Response{
+		Type:      nss.ResponseOK,
+		RequestID: query.RequestID,
+		Name:      query.Name,
+	}
 }
 
 func formatDuration(d time.Duration) string {
