@@ -52,6 +52,17 @@ func ValidateHexKey(key string, expectedLen int) error {
 	return nil
 }
 
+var hexRe = regexp.MustCompile(`^[0-9a-f]+$`)
+
+// IsHexPrefix reports whether s is a non-empty lowercase hex string shorter than
+// a full machine ID (32 chars). Used to detect partial machine ID arguments.
+func IsHexPrefix(s string) bool {
+	if len(s) == 0 || len(s) >= 32 {
+		return false
+	}
+	return hexRe.MatchString(s)
+}
+
 func ValidateBroadcastAddr(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {

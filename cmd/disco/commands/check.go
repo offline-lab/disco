@@ -41,6 +41,7 @@ func init() {
 
 type ServiceCheck struct {
 	Host      string
+	MachineID string
 	Address   string
 	Service   string
 	Protocol  string
@@ -76,11 +77,12 @@ func checkServices(cmd *cobra.Command, args []string) {
 
 			for _, addr := range h.Addresses {
 				checks = append(checks, ServiceCheck{
-					Host:     h.Hostname,
-					Address:  addr,
-					Service:  svcName,
-					Protocol: "tcp",
-					Port:     port,
+					Host:      h.Hostname,
+					MachineID: h.MachineID,
+					Address:   addr,
+					Service:   svcName,
+					Protocol:  "tcp",
+					Port:      port,
 				})
 			}
 		}
@@ -143,7 +145,7 @@ func printCheckResults(checks []ServiceCheck) {
 	reachable := 0
 	unreachable := 0
 
-	table := cli.NewTable("HOST", "SERVICE", "ADDRESS", "PORT", "STATUS")
+	table := cli.NewTable("ID", "HOST", "SERVICE", "ADDRESS", "PORT", "STATUS")
 
 	for _, c := range checks {
 		var status string
@@ -154,7 +156,13 @@ func printCheckResults(checks []ServiceCheck) {
 			status = cli.Colorize("DOWN", cli.ColorRed)
 			unreachable++
 		}
-		table.AddRow(c.Host, c.Service, c.Address, fmt.Sprintf("%d", c.Port), status)
+		id := c.MachineID
+		if id == "" {
+			id = "-"
+		} else if len(id) > 8 {
+			id = id[:8]
+		}
+		table.AddRow(id, c.Host, c.Service, c.Address, fmt.Sprintf("%d", c.Port), status)
 
 		if checkVerbose && c.Error != nil {
 			fmt.Printf("  Error: %v\n", c.Error)

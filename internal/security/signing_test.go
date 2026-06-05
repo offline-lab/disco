@@ -291,6 +291,55 @@ func TestKeyManager_ValidateMessage_NotAMap(t *testing.T) {
 	}
 }
 
+func TestLoadKeyManager_NotFound(t *testing.T) {
+	_, err := LoadKeyManager("/nonexistent/path/key.json")
+	if err == nil {
+		t.Fatal("LoadKeyManager() should fail for missing file")
+	}
+}
+
+func TestLoadKeyManager_InsecurePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyPath := filepath.Join(tmpDir, "world-readable.json")
+
+	km, _ := NewKeyManager(keyPath)
+	if err := km.SaveKeys(keyPath); err != nil {
+		t.Fatalf("SaveKeys() error = %v", err)
+	}
+	if err := os.Chmod(keyPath, 0644); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+
+	_, err := LoadKeyManager(keyPath)
+	if err == nil {
+		t.Error("LoadKeyManager() should reject world-readable key file")
+	}
+}
+
+func TestLoadKeyManager_RoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyPath := filepath.Join(tmpDir, "key.json")
+
+	original, err := NewKeyManager(keyPath)
+	if err != nil {
+		t.Fatalf("NewKeyManager() error = %v", err)
+	}
+	if err := original.SaveKeys(keyPath); err != nil {
+		t.Fatalf("SaveKeys() error = %v", err)
+	}
+
+	loaded, err := LoadKeyManager(keyPath)
+	if err != nil {
+		t.Fatalf("LoadKeyManager() error = %v", err)
+	}
+	if loaded.GetNodeID() != original.GetNodeID() {
+		t.Error("NodeID mismatch after LoadKeyManager")
+	}
+	if loaded.GetSharedSecret() != original.GetSharedSecret() {
+		t.Error("SharedSecret mismatch after LoadKeyManager")
+	}
+}
+
 func TestKeyManager_BackwardsCompatibility(t *testing.T) {
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, "legacy-key.json")

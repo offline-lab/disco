@@ -46,6 +46,46 @@ func NewKeyManager(keyPath string) (*KeyManager, error) {
 	return km, nil
 }
 
+// LoadKeyManager loads keys from an existing file. Unlike NewKeyManager it
+// returns an error if the file does not exist rather than generating new keys.
+// Use this when you only need to verify signatures and have no reason to create
+// a new key identity (e.g. read-only commands like "disco listen").
+//
+// The key file must not be group- or world-readable (permissions 0600 or
+// stricter). This mirrors the behaviour of SSH private key loading.
+func LoadKeyManager(keyPath string) (*KeyManager, error) {
+	info, err := os.Stat(keyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("key file not found: %s", keyPath)
+		}
+		return nil, fmt.Errorf("cannot access key file: %w", err)
+	}
+
+	if info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf(
+			"key file %s has insecure permissions %o — should be 0600",
+			keyPath, info.Mode().Perm(),
+		)
+	}
+
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read key file: %w", err)
+	}
+
+	km := &KeyManager{
+		trustedPeers: make(map[string]string),
+		keyPath:      keyPath,
+	}
+
+	if err := km.parseKeyData(data); err != nil {
+		return nil, fmt.Errorf("failed to parse key file: %w", err)
+	}
+
+	return km, nil
+}
+
 func (km *KeyManager) loadOrGenerateKeys() error {
 	if km.keyPath == "" {
 		return km.generateKeys()
@@ -56,6 +96,10 @@ func (km *KeyManager) loadOrGenerateKeys() error {
 		return km.generateKeys()
 	}
 
+	return km.parseKeyData(data)
+}
+
+func (km *KeyManager) parseKeyData(data []byte) error {
 	var keys struct {
 		PublicKey    string            `json:"public_key"`
 		PrivateKey   string            `json:"private_key"`
