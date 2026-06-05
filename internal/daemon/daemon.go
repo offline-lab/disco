@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -23,6 +24,7 @@ import (
 type Daemon struct {
 	config          *config.Config
 	hostname        string
+	machineID       string
 	store           *RecordStore
 	socket          *SocketServer
 	announcer       *discovery.Announcer
@@ -35,12 +37,24 @@ type Daemon struct {
 	dynamicMu       sync.Mutex
 }
 
+// readMachineID reads /etc/machine-id and returns the full ID.
+// Returns an empty string if the file is missing or unreadable.
+func readMachineID() string {
+	data, err := os.ReadFile("/etc/machine-id")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 // New creates a new daemon instance
 func New(cfg *config.Config) (*Daemon, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
+
+	machineID := readMachineID()
 
 	store := NewRecordStore(cfg.Daemon.RecordTTL, &cfg.Health, cfg.StaticHosts)
 	socket := NewSocketServer(cfg.Daemon.SocketPath, store)
@@ -59,17 +73,19 @@ func New(cfg *config.Config) (*Daemon, error) {
 	}
 
 	d := &Daemon{
-		config:   cfg,
-		hostname: hostname,
-		store:    store,
-		socket:   socket,
-		stopChan: make(chan struct{}),
+		config:    cfg,
+		hostname:  hostname,
+		machineID: machineID,
+		store:     store,
+		socket:    socket,
+		stopChan:  make(chan struct{}),
 	}
 
 	if cfg.Discovery.Enabled {
 		announcer, err := discovery.NewAnnouncer(
 			cfg.Network.BroadcastAddr,
 			hostname,
+			machineID,
 			cfg.Daemon.BroadcastInterval,
 			keyManager,
 			cfg.Network.Interfaces,
@@ -228,6 +244,7 @@ func (d *Daemon) processTimeMessages() {
 func (d *Daemon) handleDiscoveryMessage(msg *discovery.BroadcastMessage) {
 	record := &nss.Record{
 		Hostname:  msg.Hostname,
+		MachineID: msg.MachineID,
 		Addresses: msg.IPs,
 		Timestamp: msg.Timestamp,
 		TTL:       msg.TTL,
@@ -281,6 +298,7 @@ func (d *Daemon) selfRegister() {
 
 	record := &nss.Record{
 		Hostname:  d.hostname,
+		MachineID: d.machineID,
 		Addresses: ips,
 		Timestamp: time.Now().Unix(),
 		TTL:       int64(d.config.Daemon.RecordTTL.Seconds()),

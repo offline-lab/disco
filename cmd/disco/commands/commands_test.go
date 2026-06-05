@@ -4,9 +4,58 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/offline-lab/disco/internal/nss"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+func TestMatchTarget(t *testing.T) {
+	const idAlpha = "abcd1234abcd1234abcd1234abcd1234"
+	const idBeta = "ef567890ef567890ef567890ef567890"
+
+	hosts := []nss.HostHealth{
+		{
+			Hostname:  "alpha",
+			MachineID: idAlpha,
+			Addresses: []string{"10.0.0.1"},
+			Services:  map[string]string{"ssh": "10.0.0.1:22"},
+		},
+		{
+			Hostname:  "beta",
+			MachineID: idBeta,
+			Addresses: []string{"10.0.0.2"},
+			Services:  map[string]string{"openvpn": "10.0.0.2:1194"},
+		},
+	}
+
+	cases := []struct {
+		target string
+		want   string
+	}{
+		// hostname match (case-insensitive)
+		{"alpha", "10.0.0.1"},
+		{"ALPHA", "10.0.0.1"},
+		{"beta", "10.0.0.2"},
+		// exact full machine ID match
+		{idAlpha, "10.0.0.1"},
+		{idBeta, "10.0.0.2"},
+		// partial machine ID does NOT match — exact only, no prefix
+		{"abcd1234", "abcd1234"},
+		{"abcd", "abcd"},
+		// service name match
+		{"ssh", "10.0.0.1"},
+		{"openvpn", "10.0.0.2"},
+		// no match falls back to target unchanged
+		{"unknown", "unknown"},
+	}
+
+	for _, c := range cases {
+		got := matchTarget(c.target, hosts)
+		if got != c.want {
+			t.Errorf("matchTarget(%q) = %q, want %q", c.target, got, c.want)
+		}
+	}
+}
 
 // TestNoFlagShorthandConflicts walks the entire command tree and verifies that
 // no command defines two flags with the same shorthand in the same flagset.

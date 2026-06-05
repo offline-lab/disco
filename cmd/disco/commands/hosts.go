@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/offline-lab/disco/cmd/disco/internal/cli"
 	"github.com/offline-lab/disco/internal/nss"
@@ -73,8 +75,15 @@ func listHosts(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	table := cli.NewTable("HOSTNAME", "ADDRESSES", "STATUS", "SERVICES", "LAST SEEN")
+	table := cli.NewTable("ID", "HOSTNAME", "ADDRESSES", "STATUS", "SERVICES", "LAST SEEN")
 	for _, h := range response.Hosts {
+		id := h.MachineID
+		if id == "" {
+			id = "-"
+		} else if len(id) > 8 {
+			id = id[:8]
+		}
+
 		addrs := cli.Truncate(cli.JoinStrings(h.Addresses, ", "), 34)
 
 		services := make([]string, 0, len(h.Services))
@@ -88,22 +97,29 @@ func listHosts(cmd *cobra.Command, args []string) {
 
 		status := cli.ColorizeStatus(h.Status)
 
-		table.AddRow(h.Hostname, addrs, status, svcStr, h.LastSeenAgo)
+		table.AddRow(id, h.Hostname, addrs, status, svcStr, h.LastSeenAgo)
 	}
 	table.Print()
 }
 
 func showHost(cmd *cobra.Command, args []string) {
-	hostname := args[0]
+	name := args[0]
 
-	if err := cli.ValidateHostname(hostname); err != nil {
-		checkError(fmt.Errorf("invalid hostname: %w", err))
+	// Validate: must be a hostname, a full 32-char machine ID, or a hex prefix.
+	isHex := cli.IsHexPrefix(name)
+	isFull := cli.ValidateHexKey(name, 32) == nil
+	if !isHex && !isFull {
+		if err := cli.ValidateHostname(name); err != nil {
+			checkError(fmt.Errorf("invalid hostname or machine ID: %w", err))
+		}
 	}
 
 	client := cli.NewDaemonClient(getSocketPath())
+
+	// First: exact lookup by hostname or full machine ID.
 	response, err := client.Query(&nss.Query{
 		Type:      nss.HostsShow,
-		Name:      hostname,
+		Name:      name,
 		RequestID: cli.GenerateRequestID("host"),
 	})
 	checkError(err)
@@ -111,13 +127,54 @@ func showHost(cmd *cobra.Command, args []string) {
 	response, err = cli.HandleResponse(response, err)
 	checkError(err)
 
-	if response.Type == nss.ResponseNotFound || len(response.Hosts) == 0 {
-		cli.Fatal(fmt.Sprintf("Host not found: %s", hostname), nil, cli.ExitError)
+	if response.Type != nss.ResponseNotFound && len(response.Hosts) > 0 {
+		printHostDetail(response.Hosts[0])
+		return
 	}
 
-	h := response.Hosts[0]
+	// Fallback: prefix match against all machine IDs when a short hex string was given.
+	if !isHex {
+		cli.Fatal(fmt.Sprintf("Host not found: %s", name), nil, cli.ExitError)
+	}
 
+	listResp, err := client.Query(&nss.Query{
+		Type:      nss.HostsList,
+		RequestID: cli.GenerateRequestID("host-prefix"),
+	})
+	checkError(err)
+	listResp, err = cli.HandleResponse(listResp, err)
+	checkError(err)
+
+	var matches []nss.HostHealth
+	for _, h := range listResp.Hosts {
+		if strings.HasPrefix(h.MachineID, name) {
+			matches = append(matches, h)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		cli.Fatal(fmt.Sprintf("Host not found: %s", name), nil, cli.ExitError)
+	case 1:
+		printHostDetail(matches[0])
+	default:
+		fmt.Fprintf(os.Stderr, "Ambiguous prefix %q matches %d hosts — use more characters:\n", name, len(matches))
+		for _, h := range matches {
+			short := h.MachineID
+			if len(short) > 8 {
+				short = short[:8]
+			}
+			fmt.Fprintf(os.Stderr, "  %s  %s\n", short, h.Hostname)
+		}
+		os.Exit(int(cli.ExitError))
+	}
+}
+
+func printHostDetail(h nss.HostHealth) {
 	fmt.Printf("Hostname:    %s\n", h.Hostname)
+	if h.MachineID != "" {
+		fmt.Printf("Machine ID:  %s\n", h.MachineID)
+	}
 	fmt.Printf("Addresses:   %s\n", cli.JoinStrings(h.Addresses, ", "))
 	fmt.Printf("Status:      %s\n", cli.ColorizeStatus(h.Status))
 	fmt.Printf("Last Seen:   %s\n", h.LastSeenAgo)
@@ -125,8 +182,8 @@ func showHost(cmd *cobra.Command, args []string) {
 
 	if len(h.Services) > 0 {
 		fmt.Println("\nServices:")
-		for name, proto := range h.Services {
-			fmt.Printf("  - %s (%s)\n", name, proto)
+		for svc, proto := range h.Services {
+			fmt.Printf("  - %s (%s)\n", svc, proto)
 		}
 	}
 }

@@ -25,6 +25,7 @@ type BroadcastMessage struct {
 	MessageID string                    `json:"message_id"`
 	Timestamp int64                     `json:"timestamp"`
 	Hostname  string                    `json:"hostname"`
+	MachineID string                    `json:"machine_id,omitempty"`
 	IPs       []string                  `json:"ips"`
 	Services  []ServiceInfo             `json:"services"`
 	Signature *security.MessageSecurity `json:"signature,omitempty"`
@@ -60,6 +61,7 @@ type TimeAnnounceMessage struct {
 type Announcer struct {
 	broadcastAddr string
 	hostname      string
+	machineID     string
 	interval      time.Duration
 	conn          *net.UDPConn
 	services      map[string]ServiceInfo
@@ -91,7 +93,7 @@ type Listener struct {
 	bufPool sync.Pool
 }
 
-func NewAnnouncer(broadcastAddr, hostname string, interval time.Duration, keyManager *security.KeyManager, interfaces []string) (*Announcer, error) {
+func NewAnnouncer(broadcastAddr, hostname, machineID string, interval time.Duration, keyManager *security.KeyManager, interfaces []string) (*Announcer, error) {
 	addr, err := net.ResolveUDPAddr("udp4", broadcastAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve broadcast address: %w", err)
@@ -115,6 +117,7 @@ func NewAnnouncer(broadcastAddr, hostname string, interval time.Duration, keyMan
 	return &Announcer{
 		broadcastAddr:       broadcastAddr,
 		hostname:            hostname,
+		machineID:           machineID,
 		interval:            interval,
 		conn:                conn,
 		services:            make(map[string]ServiceInfo),
@@ -241,12 +244,16 @@ func (a *Announcer) createAnnouncement() *BroadcastMessage {
 		MessageID: fmt.Sprintf("%s-%d", a.hostname, nowNano),
 		Timestamp: nowUnix,
 		Hostname:  a.hostname,
+		MachineID: a.machineID,
 		IPs:       ips,
 		Services:  services,
 		TTL:       3600,
 	}
 
 	if a.keyManager != nil {
+		// MachineID is intentionally excluded from the signed payload so that
+		// older nodes (which don't send it) can still be verified by newer ones.
+		// It is informational only — the IP and hostname are what security relies on.
 		sigData, err := json.Marshal(struct {
 			Type      MessageType   `json:"type"`
 			MessageID string        `json:"message_id"`
@@ -352,6 +359,10 @@ func (a *Announcer) Stop() {
 }
 
 func NewListener(broadcastAddr string, keyManager *security.KeyManager, requireSigned bool) (*Listener, error) {
+	if requireSigned && keyManager == nil {
+		return nil, fmt.Errorf("requireSigned requires a key manager")
+	}
+
 	_, port, err := net.SplitHostPort(broadcastAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse broadcast address: %w", err)

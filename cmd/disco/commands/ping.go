@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/offline-lab/disco/cmd/disco/internal/cli"
+	"github.com/offline-lab/disco/internal/nss"
 	"github.com/spf13/cobra"
 )
 
 var (
-	pingTarget   string
 	pingPort     int
 	pingCount    int
 	pingInterval time.Duration
@@ -40,9 +40,9 @@ func init() {
 }
 
 func runPing(cmd *cobra.Command, args []string) error {
-	pingTarget = args[0]
+	raw := args[0]
 
-	if err := cli.ValidatePingTarget(pingTarget); err != nil {
+	if err := cli.ValidatePingTarget(raw); err != nil {
 		return fmt.Errorf("invalid target: %w", err)
 	}
 
@@ -50,18 +50,69 @@ func runPing(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if pingVerbose {
-		fmt.Printf("Pinging %s on port %d (%d times, %s interval)...\n\n",
-			pingTarget, pingPort, pingCount, pingInterval)
+	target := resolveTarget(raw)
+	if target != raw && pingVerbose {
+		fmt.Printf("Resolved %q to %s\n", raw, target)
 	}
 
-	successful, latencies := executePings()
-	printPingResults(successful, latencies)
+	if pingVerbose {
+		fmt.Printf("Pinging %s on port %d (%d times, %s interval)...\n\n",
+			target, pingPort, pingCount, pingInterval)
+	}
+
+	successful, latencies := executePings(target)
+	printPingResults(target, successful, latencies)
 
 	if successful > 0 {
 		return nil
 	}
 	return fmt.Errorf("host is down or unreachable")
+}
+
+// resolveTarget looks up the target in the daemon as a hostname, machine ID,
+// or service name and returns the first matching IP address. Falls back to the
+// original target if the daemon is unreachable or no match is found.
+func resolveTarget(target string) string {
+	if net.ParseIP(target) != nil {
+		return target
+	}
+
+	client := cli.NewDaemonClient(getSocketPath())
+	response, err := client.Query(&nss.Query{
+		Type:      nss.HostsList,
+		RequestID: cli.GenerateRequestID("ping"),
+	})
+	if err != nil {
+		return target
+	}
+	response, err = cli.HandleResponse(response, err)
+	if err != nil {
+		return target
+	}
+
+	return matchTarget(target, response.Hosts)
+}
+
+// matchTarget resolves a target string against a list of hosts.
+// Priority: exact hostname > exact machine ID > service name.
+// Machine ID matching is exact (not prefix) to prevent collisions with hostnames.
+func matchTarget(target string, hosts []nss.HostHealth) string {
+	for _, h := range hosts {
+		if strings.EqualFold(h.Hostname, target) && len(h.Addresses) > 0 {
+			return h.Addresses[0]
+		}
+	}
+	for _, h := range hosts {
+		if h.MachineID != "" && h.MachineID == strings.ToLower(target) && len(h.Addresses) > 0 {
+			return h.Addresses[0]
+		}
+	}
+	for _, h := range hosts {
+		if _, ok := h.Services[target]; ok && len(h.Addresses) > 0 {
+			return h.Addresses[0]
+		}
+	}
+	return target
 }
 
 func validatePingArgs() error {
@@ -76,13 +127,13 @@ func validatePingArgs() error {
 	return nil
 }
 
-func executePings() (successful int, latencies []time.Duration) {
+func executePings(target string) (successful int, latencies []time.Duration) {
 	latencies = make([]time.Duration, 0, pingCount)
 	const timeout = 2 * time.Second
 
 	for i := 0; i < pingCount; i++ {
 		start := time.Now()
-		address := net.JoinHostPort(pingTarget, fmt.Sprintf("%d", pingPort))
+		address := net.JoinHostPort(target, fmt.Sprintf("%d", pingPort))
 		deadline := time.Now().Add(timeout)
 
 		conn, err := net.DialTimeout("udp", address, timeout)
@@ -127,7 +178,7 @@ func executePings() (successful int, latencies []time.Duration) {
 			latencies = append(latencies, latency)
 			successful++
 			if pingVerbose {
-				cli.PrintSuccess("[%d] PONG from %s (latency: %v)\n", i+1, pingTarget, latency)
+				cli.PrintSuccess("[%d] PONG from %s (latency: %v)\n", i+1, target, latency)
 			}
 		} else {
 			if pingVerbose {
@@ -141,9 +192,9 @@ func executePings() (successful int, latencies []time.Duration) {
 	return successful, latencies
 }
 
-func printPingResults(successful int, latencies []time.Duration) {
+func printPingResults(target string, successful int, latencies []time.Duration) {
 	fmt.Printf("\n=== Results ===\n")
-	fmt.Printf("Target:    %s:%d\n", pingTarget, pingPort)
+	fmt.Printf("Target:    %s:%d\n", target, pingPort)
 	fmt.Printf("Success:   %d/%d\n", successful, pingCount)
 
 	if successful > 0 {

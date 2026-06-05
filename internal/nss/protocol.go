@@ -60,6 +60,7 @@ type Response struct {
 
 type HostHealth struct {
 	Hostname    string            `json:"hostname"`
+	MachineID   string            `json:"machine_id,omitempty"`
 	Addresses   []string          `json:"addresses"`
 	Status      string            `json:"status"`
 	Services    map[string]string `json:"services"`
@@ -80,6 +81,7 @@ type ServiceHealth struct {
 // Record represents a host record stored in the daemon
 type Record struct {
 	Hostname  string
+	MachineID string
 	Aliases   []string
 	Addresses []string
 	Timestamp int64

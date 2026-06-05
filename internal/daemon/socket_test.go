@@ -236,6 +236,68 @@ func TestSocketServer_handleQueryByName_Alias(t *testing.T) {
 	}
 }
 
+func TestSocketServer_handleHostsList_MachineID(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "node1",
+		MachineID: "abcd1234abcd1234abcd1234abcd1234",
+		Addresses: []string{"192.168.1.10"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	resp := server.handleHostsList(&nss.Query{Type: nss.HostsList, RequestID: "mid-001"})
+
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("Expected OK, got %s", resp.Type)
+	}
+	if len(resp.Hosts) != 1 {
+		t.Fatalf("Expected 1 host, got %d", len(resp.Hosts))
+	}
+	if resp.Hosts[0].MachineID != "abcd1234abcd1234abcd1234abcd1234" {
+		t.Errorf("MachineID = %q, want full 32-char ID", resp.Hosts[0].MachineID)
+	}
+}
+
+func TestSocketServer_handleHostsShow_MachineID(t *testing.T) {
+	store := newTestSocketStore()
+	server := NewSocketServer("/tmp/test.sock", store)
+
+	store.AddOrUpdate(&nss.Record{
+		Hostname:  "node2",
+		MachineID: "ef567890ef567890ef567890ef567890",
+		Addresses: []string{"192.168.1.20"},
+		Timestamp: time.Now().Unix(),
+		TTL:       3600,
+	})
+
+	// Lookup by hostname
+	resp := server.handleHostsShow(&nss.Query{Type: nss.HostsShow, Name: "node2", RequestID: "mid-002a"})
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("by hostname: expected OK, got %s", resp.Type)
+	}
+	if resp.Hosts[0].MachineID != "ef567890ef567890ef567890ef567890" {
+		t.Errorf("by hostname: MachineID = %q, want full ID", resp.Hosts[0].MachineID)
+	}
+
+	// Lookup by full machine ID
+	resp = server.handleHostsShow(&nss.Query{Type: nss.HostsShow, Name: "ef567890ef567890ef567890ef567890", RequestID: "mid-002b"})
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("by machine ID: expected OK, got %s", resp.Type)
+	}
+	if resp.Hosts[0].Hostname != "node2" {
+		t.Errorf("by machine ID: Hostname = %q, want node2", resp.Hosts[0].Hostname)
+	}
+
+	// Partial machine ID does NOT match
+	resp = server.handleHostsShow(&nss.Query{Type: nss.HostsShow, Name: "ef567890", RequestID: "mid-002c"})
+	if resp.Type != nss.ResponseNotFound {
+		t.Errorf("partial ID: expected NOTFOUND, got %s", resp.Type)
+	}
+}
+
 func TestSocketServer_handleServiceAnnounce(t *testing.T) {
 	store := newTestSocketStore()
 	server := NewSocketServer("/tmp/test.sock", store)

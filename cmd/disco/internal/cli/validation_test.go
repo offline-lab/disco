@@ -193,6 +193,29 @@ func TestValidatePingTarget(t *testing.T) {
 	}
 }
 
+func TestIsHexPrefix(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"abcd1234", true},
+		{"a", true},
+		{"abcdef0123456789abcdef0123456789", false}, // exactly 32 — not a prefix
+		{"abcdef0123456789abcdef01234567890", false}, // > 32
+		{"", false},
+		{"abcg", false},    // non-hex char
+		{"ABCD", false},    // uppercase not accepted
+		{"abc-def", false}, // hyphens not hex
+	}
+
+	for _, tt := range tests {
+		got := IsHexPrefix(tt.input)
+		if got != tt.want {
+			t.Errorf("IsHexPrefix(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestValidateServiceName(t *testing.T) {
 	tests := []struct {
 		name    string

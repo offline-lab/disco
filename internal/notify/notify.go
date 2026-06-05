@@ -32,7 +32,7 @@ func send(payload string) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, _ = conn.Write([]byte(payload))
 }

@@ -240,6 +240,7 @@ func (s *SocketServer) handleHostsList(query *nss.Query) *nss.Response {
 
 		hosts = append(hosts, nss.HostHealth{
 			Hostname:    r.Hostname,
+			MachineID:   r.MachineID,
 			Addresses:   r.Addresses,
 			Status:      string(r.Status),
 			Services:    r.Services,
@@ -258,14 +259,14 @@ func (s *SocketServer) handleHostsList(query *nss.Query) *nss.Response {
 }
 
 func (s *SocketServer) handleHostsShow(query *nss.Query) *nss.Response {
-	hostname := query.Name
-	if hostname == "" {
-		return nss.NewErrorResponse(query.RequestID, "hostname required")
+	name := query.Name
+	if name == "" {
+		return nss.NewErrorResponse(query.RequestID, "hostname or machine ID required")
 	}
 
 	records := s.store.ListAll()
 	for _, r := range records {
-		if r.Hostname == hostname {
+		if r.Hostname == name || (r.MachineID != "" && r.MachineID == name) {
 			var lastSeenAgo string
 			if r.IsStatic {
 				lastSeenAgo = "(static)"
@@ -279,6 +280,7 @@ func (s *SocketServer) handleHostsShow(query *nss.Query) *nss.Response {
 				RequestID: query.RequestID,
 				Hosts: []nss.HostHealth{{
 					Hostname:    r.Hostname,
+					MachineID:   r.MachineID,
 					Addresses:   r.Addresses,
 					Status:      string(r.Status),
 					Services:    r.Services,

@@ -134,6 +134,57 @@ func TestServiceInfo_Aliases_OmitEmpty(t *testing.T) {
 	}
 }
 
+func TestBroadcastMessage_MachineID_Roundtrip(t *testing.T) {
+	fullID := "abcd1234abcd1234abcd1234abcd1234"
+	msg := &BroadcastMessage{
+		Type:      MessageAnnounce,
+		MessageID: "test-mid",
+		Timestamp: 1000,
+		Hostname:  "node1",
+		MachineID: fullID,
+		IPs:       []string{"192.168.1.1"},
+		TTL:       3600,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded BroadcastMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.MachineID != fullID {
+		t.Errorf("MachineID = %q, want %q", decoded.MachineID, fullID)
+	}
+}
+
+func TestBroadcastMessage_MachineID_OmitEmpty(t *testing.T) {
+	msg := &BroadcastMessage{
+		Type:      MessageAnnounce,
+		MessageID: "test-no-mid",
+		Timestamp: 1000,
+		Hostname:  "oldnode",
+		IPs:       []string{"192.168.1.2"},
+		TTL:       3600,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if _, ok := m["machine_id"]; ok {
+		t.Error("machine_id field present in JSON when it should be omitted")
+	}
+}
+
 func TestBroadcastMessage_ServiceAliases_Roundtrip(t *testing.T) {
 	msg := &BroadcastMessage{
 		Type:      MessageAnnounce,
