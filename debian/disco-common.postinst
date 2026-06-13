@@ -28,14 +28,23 @@ case "$1" in
         # Remind user to configure nsswitch.conf
         if ! grep -q "disco" /etc/nsswitch.conf; then
             echo ""
-            echo "Disco daemon has been installed."
+            echo "Disco has been installed. Add 'disco' to /etc/nsswitch.conf."
+            echo "'disco' must appear immediately after 'files' and before"
+            echo "any 'resolve [!UNAVAIL=return]' entry — if placed after it,"
+            echo "the [!UNAVAIL=return] action stops the chain on NOTFOUND"
+            echo "and disco is never reached."
             echo ""
-            echo "To enable name resolution, add 'disco' to /etc/nsswitch.conf:"
-            echo "  hosts: files disco dns"
+            if [ -f /run/systemd/resolve/resolv.conf ]; then
+                echo "systemd-resolved detected. Recommended hosts line:"
+                echo "  hosts: files disco resolve [!UNAVAIL=return] dns myhostname"
+            else
+                echo "Recommended hosts line:"
+                echo "  hosts: files disco dns"
+            fi
             echo ""
             echo "Then start the daemon:"
-            echo "  systemctl enable disco"
-            echo "  systemctl start disco"
+            echo "  systemctl enable disco-daemon"
+            echo "  systemctl start disco-daemon"
             echo ""
         fi
         ;;

@@ -1,526 +1,117 @@
-# Disco Architecture
-
-**Version**: 1.1.0
-**Last Updated**: 2026-05-24
-
----
+# Architecture
 
 ## Overview
 
-Disco is a lightweight name service daemon for offline, airgapped emergency networks. It provides automatic service discovery and name resolution across nodes without requiring external DNS services or internet connectivity.
+Disco is built around two ideas: nodes announce themselves, and the daemon caches what it hears. Nothing is centralized. Every node is self-contained.
 
-### Design Goals
+The daemon has no knowledge of the network topology at startup. It broadcasts its presence on a UDP socket, receives announcements from other nodes, and builds an in-memory cache of what it has seen. The cache drives both the NSS module (via Unix socket) and the optional DNS server.
 
-1. **Minimal resources** - Runs on battery/solar-powered embedded devices (RPi Zero 2W, 512MB RAM)
-2. **Zero configuration** - Nodes discover each other automatically
-3. **Native integration** - Uses NSS module for seamless Linux integration
-4. **Offline-first** - Designed for airgapped environments with no internet access
-5. **Power efficient** - Minimal CPU usage, no active health checks
+## Discovery protocol
 
----
+Each node broadcasts a JSON `ANNOUNCE` message on UDP port 5354 at a configurable interval (default 30 seconds). The message contains the node's hostname, IP addresses, machine ID, and detected services.
 
-## Components
-
-### 1. disco-daemon (Go Binary, 5.8MB)
-
-**Purpose**: Main discovery and name resolution service
-
-**Responsibilities**:
-- UDP broadcast listener (port 5354)
-- Unix socket server (NSS queries)
-- Service detection and announcement
-- DNS server (optional, port 53)
-- Time synchronization service (optional)
-- Record cache management
-
-**Resource Usage**:
-- Memory: <10MB typical
-- CPU: <5% idle, <20% peak
-- Network: <1 KB/sec per node
-
-**Configuration**: `/etc/disco/config.yaml`
-
-**Socket**: `/run/disco.sock` (Unix domain socket)
-
-### 2. disco (CLI Tool, 3.6MB)
-
-**Purpose**: Unified command-line interface for administration
-
-**Commands**:
-```bash
-disco hosts [list|show|forget|mark-lost]  # Host management
-disco services [list|show]                # Service discovery
-disco lookup <hostname>                   # Name resolution
-disco status                               # Daemon status
-disco start [flags]                        # Start daemon
-disco config validate <file>               # Validate config
-disco key [generate|show|add-trusted]      # Key management
-disco time                                 # Time sync status
-disco timeset                              # Force time update
-disco ping <target>                        # Network diagnostics
-disco announce [flags]                     # Manual announcements
-```
-
-**Design**:
-- **No daemon code** - Only queries daemon via Unix socket
-- **Lightweight** - Separate binary avoids memory bloat in CLI
-- **Secure** - Input validation, command injection prevention
-
-### 3. disco-gps-broadcaster (Go Binary, 2.5MB)
-
-**Purpose**: GPS time source for time synchronization
-
-**Responsibilities**:
-- Read GPS time from serial device
-- Broadcast TIME_ANNOUNCE messages
-- Multi-source time validation
-
-**Protocol**: UDP broadcast on port 5354
-
-**Alternatives**:
-- Arduino implementation (see `gps-broadcaster/arduino/`)
-- ESPHome implementation (see `gps-broadcaster/esphome/`)
-
-### 4. libnss_disco.so.2 (C Library)
-
-**Purpose**: Native Linux integration via NSS
-
-**Functions**:
-- `_nss_disco_gethostbyname_r` - Resolve hostname to IP
-- `_nss_disco_gethostbyname2_r` - Resolve hostname (IPv4/IPv6)
-- `_nss_disco_gethostbyaddr_r` - Reverse DNS lookup
-
-**Integration**:
-```bash
-# /etc/nsswitch.conf
-hosts: files disco dns
-```
-
-**Communication**: Unix domain socket to disco-daemon
-
----
-
-## Data Flow
-
-### Name Resolution Flow
-
-```
-Application (curl, ssh, etc.)
-         |
-         | getaddrinfo("web1")
-         v
-    glibc NSS
-         |
-         | loads libnss_disco.so.2
-         v
-  NSS Module (C)
-         |
-         | Unix socket: /run/disco.sock
-         v
-  disco-daemon (Go)
-         |
-         | Query in-memory cache
-         v
-    Return IP: 192.168.1.10
-```
-
-### Discovery Protocol
-
-```
-Node A                          Node B
-  |                               |
-  | UDP Broadcast (port 5354)    |
-  |----------------------------->|
-  | {type: "announce",           |
-  |  hostname: "web1",           |
-  |  addresses: ["10.0.0.1"],    |
-  |  services: {"www": 80}}      |
-  |                               |
-  |                        Cache update
-  |                        TTL: 3600s
-  |                               |
-  |<-----------------------------|
-  | UDP Broadcast (announce)     |
-  |        from Node B            |
-  |                               |
- Cache update                   |
- TTL: 3600s                      |
-```
-
-### Service Detection Flow
-
-```
-disco-daemon
-     |
-     | Scan local ports
-     v
-  Port 80 open?
-     |
-     | Yes
-     v
-  Map to service: "www"
-     |
-     | Add to announcement
-     v
-  Broadcast: {"www": 80}
-```
-
----
-
-## Network Protocol
-
-### Broadcast Message Format
-
-**Port**: UDP 5354
-**Address**: 255.255.255.255 (configurable)
-
-**Message Types**:
-
-1. **ANNOUNCE** - Node announcement
 ```json
 {
   "type": "ANNOUNCE",
   "message_id": "announce-1234567890",
   "timestamp": 1708123456,
-  "hostname": "web1",
-  "addresses": ["192.168.1.10", "10.0.0.1"],
-  "services": {
-    "www": 80,
-    "smtp": 25
-  },
-  "ttl": 3600,
-  "signature": "..." // Optional
+  "hostname": "node1",
+  "machine_id": "a1b2c3d4...",
+  "addresses": ["192.168.1.10"],
+  "services": [
+    {"name": "www", "port": 80},
+    {"name": "ssh", "port": 22}
+  ],
+  "ttl": 3600
 }
 ```
 
-2. **TIME_ANNOUNCE** - GPS time broadcast
+Any node that receives this message updates its cache. There is no handshake, no acknowledgement, no central coordinator. A node that goes silent has its cache entry transition from `healthy` to `stale` to `lost` as time passes; eventually the record is removed.
+
+Message deduplication uses the `message_id` field with a 5-minute TTL, which also serves as replay protection when security is enabled.
+
+## Service detection
+
+When `discovery.detect_services: true`, the daemon periodically scans local ports. It compares open ports against `discovery.service_port_mapping` to produce human-readable service names (`www`, `smtp`, `ssh`, etc.) and includes these in each announcement.
+
+Services can also be registered dynamically via `disco service add`, which tells the running daemon to advertise a new service immediately without a config change.
+
+## Name resolution
+
+Applications call `getaddrinfo()` or `gethostbyname()`, which glibc routes through the Name Service Switch based on `/etc/nsswitch.conf`. With `disco` in the `hosts` line, glibc loads `libnss_disco.so.2` and calls into it.
+
+The NSS module connects to the daemon's Unix socket at `/run/disco.sock` and sends a JSON query:
+
 ```json
-{
-  "type": "TIME_ANNOUNCE",
-  "timestamp": 1708123456789000000,
-  "source_id": "gps-node-1",
-  "clock_info": {
-    "stratum": 1,
-    "precision": -20,
-    "root_dispersion": 0.0001,
-    "reference_id": "GPS"
-  },
-  "signature": "..."
-}
+{"type": "QUERY_BY_NAME", "request_id": "query-001", "name": "node1"}
 ```
 
-### NSS Query Protocol
+The daemon responds with the cached record:
 
-**Transport**: Unix domain socket (`/run/disco.sock`)
-**Format**: JSON
-
-**Query**:
-```json
-{
-  "type": "QUERY_BY_NAME",
-  "request_id": "query-123456",
-  "name": "web1"
-}
-```
-
-**Response**:
 ```json
 {
   "type": "SUCCESS",
-  "request_id": "query-123456",
+  "request_id": "query-001",
   "hosts": [{
-    "hostname": "web1",
+    "hostname": "node1",
     "addresses": ["192.168.1.10"],
     "status": "healthy",
-    "services": {"www": 80},
-    "is_static": false,
-    "last_seen_ago": "2m",
-    "expires_in": "58m"
+    "services": {"www": "80/tcp"},
+    "last_seen_ago": "12s"
   }]
 }
 ```
 
----
+If the daemon is not running, the socket does not exist and the NSS module returns `UNAVAIL` immediately. glibc falls through to the next source in `nsswitch.conf` (usually `resolve` or `dns`), so resolution continues to work.
 
-## Deployment Patterns
+## Security model
 
-### Pattern 1: Minimal (Headless Nodes)
+Without security enabled, any node on the broadcast domain can inject arbitrary records. With security enabled, each node signs its `ANNOUNCE` messages using HMAC-SHA256. The daemon verifies signatures against a list of trusted public keys and drops messages that fail verification or carry an unknown key.
 
-**Use Case**: Embedded devices, minimal administration
+Signed messages include a timestamp. The daemon rejects messages with a timestamp more than 5 minutes old, preventing replays of captured announcements.
 
-**Components**:
-- disco-daemon only
-- libnss_disco.so.2
+The `TIME_ANNOUNCE` messages used for GPS time sync follow the same signing mechanism.
 
-**Installation**:
-```bash
-sudo install -m 755 disco-daemon /usr/local/bin/
-sudo install -m 644 libnss_disco.so.2 /lib/
-echo "hosts: files disco dns" >> /etc/nsswitch.conf
-systemctl start disco
-```
+## Time synchronization
 
-**Resource Usage**: ~10MB RAM, <5% CPU
+When `time_sync.enabled: true`, the daemon listens for `TIME_ANNOUNCE` messages on the same UDP port. These messages carry GPS-derived timestamps from broadcaster nodes (Raspberry Pi, Arduino, ESP32).
 
-### Pattern 2: Full (Management Nodes)
+The daemon does not accept a single source. It waits for `min_sources` independent broadcasters to agree within `max_source_spread` of each other. Once the threshold is met, it adjusts the system clock: stepping for large offsets, slewing for small ones.
 
-**Use Case**: Administration workstations, monitoring
+This design tolerates a single malfunctioning GPS source.
 
-**Components**:
-- disco-daemon
-- disco (CLI)
-- libnss_disco.so.2
-- disco-gps-broadcaster (if time sync needed)
+## Failure modes
 
-**Installation**:
-```bash
-make && sudo make install
-disco start -config /etc/disco/config.yaml
-```
+**Daemon not running**: The NSS socket does not exist. glibc returns `UNAVAIL` and falls through to `resolve` or `dns`. Discovery stops but name resolution continues.
 
-**Resource Usage**: ~15MB RAM, <10% CPU
+**Network partition**: Announcements stop arriving. Affected nodes transition from `healthy` to `stale` to `lost` over time. When the partition heals and announcements resume, records return to `healthy`.
 
-### Pattern 3: GPS Time Source
+**Broadcast storm**: The token bucket rate limiter caps outbound broadcasts at `network.max_broadcast_rate` messages per second (default 10). Incoming duplicates within the 5-minute deduplication window are discarded.
 
-**Use Case**: Networks requiring precise time synchronization
+**Cache expiry**: If all records expire (e.g. daemon restarted with no peers online), `getent hosts` returns nothing from disco. glibc falls through to the next NSS source. Records repopulate on the next broadcast cycle (default 30 seconds).
 
-**Components**:
-- disco-gps-broadcaster on one node
-- disco-daemon on all nodes (with time_sync enabled)
-
-**Configuration**:
-```yaml
-time_sync:
-  enabled: true
-  min_sources: 2
-  require_signed: true
-```
-
----
-
-## Configuration
-
-### Minimal Config
-
-```yaml
-daemon:
-  socket_path: /run/disco.sock
-  broadcast_interval: 30s
-  record_ttl: 3600s
-
-network:
-  broadcast_addr: 255.255.255.255:5354
-  max_broadcast_rate: 10
-
-discovery:
-  enabled: true
-  detect_services: true
-
-security:
-  enabled: false
-
-logging:
-  level: info
-  format: text
-```
-
-### Full Config
-
-```yaml
-daemon:
-  socket_path: /run/disco.sock
-  broadcast_interval: 30s
-  record_ttl: 3600s
-  grace_period: 60s
-
-network:
-  broadcast_addr: 255.255.255.255:5354
-  max_broadcast_rate: 10
-  max_connections: 100
-
-discovery:
-  enabled: true
-  detect_services: true
-  scan_interval: 60s
-  service_port_mapping:
-    www: [80, 443, 8080]
-    smtp: [25, 587]
-    mail: [110, 143, 993, 995]
-
-security:
-  enabled: true
-  key_path: /etc/disco/keys.json
-  require_signed: true
-  max_message_age: 300s
-
-dns:
-  enabled: true
-  port: 53
-  domain: disco
-  bind_addresses: ["0.0.0.0"]
-
-time_sync:
-  enabled: true
-  min_sources: 2
-  max_source_spread: 100ms
-  max_stale_age: 30s
-  step_threshold: 128ms
-  slew_threshold: 500us
-  poll_interval: 60s
-  require_signed: true
-  allow_step_backward: false
-
-logging:
-  level: info
-  format: json
-  file: /var/log/disco.log
-```
-
----
-
-## Failure Modes
-
-### Daemon Not Running
-
-**Symptom**: Name resolution fails
-**Detection**: Socket file missing
-**Fallback**: NSS continues to next source (dns)
-**Recovery**: Auto-restart via systemd
-
-### Network Partition
-
-**Symptom**: Nodes not discovered
-**Detection**: Records expire
-**Behavior**: Mark as "lost", eventually removed
-**Recovery**: Auto-discovery on network restore
-
-### Cache Expiration
-
-**Symptom**: All records expire
-**Detection**: Empty host list
-**Behavior**: Returns NOTFOUND
-**Recovery**: Wait for next broadcast (30s default)
-
-### Time Sync Failure
-
-**Symptom**: Clock drift
-**Detection**: No TIME_ANNOUNCE messages
-**Behavior**: Logs warning, continues operation
-**Recovery**: Manual time set or GPS restore
-
----
-
-## Monitoring
-
-### Health Checks
-
-**Daemon Status**:
-```bash
-disco status
-```
-
-**Host Health**:
-```bash
-disco hosts --json | jq '.[] | select(.status!="healthy")'
-```
-
-**Time Sync**:
-```bash
-disco time
-```
-
-### Logging
-
-**Text Format**:
-```
-2026-03-01T10:30:00Z INFO Received announcement from web1
-2026-03-01T10:30:05Z DEBUG Processing query for host: mail1
-2026-03-01T10:30:10Z WARN Host expired: old-node
-```
-
-**JSON Format**:
-```json
-{"level":"info","ts":1708123456,"msg":"Received announcement","hostname":"web1"}
-```
-
----
-
-## Limitations
-
-### Current Limitations
-
-1. **Single broadcast domain** - No routing between subnets
-2. **No persistence** - Cache lost on daemon restart
-3. **Fixed TTL** - No dynamic adjustment
-4. **IPv4 only** - No IPv6 support
-5. **No load balancing** - Single IP per hostname
-
-### Known Issues
-
-1. **Large networks** (>100 nodes) may need rate limit tuning
-2. **High churn** (frequent node changes) increases CPU usage
-3. **Time sync** requires GPS hardware or broadcaster
-
-### Not Supported
-
-- Multi-interface announcements
-- DNSSEC
-- Dynamic TTL adjustment
-- Health checking (passive only)
-- Web UI
-
----
-
-## Development
-
-### Building from Source
-
-```bash
-# Clone
-git clone https://github.com/offline-lab/disco
-cd disco
-
-# Build all
-make
-
-# Test
-go test ./...
-
-# Install
-sudo make install
-```
-
-### Contributing
-
-1. Fork repository
-2. Create feature branch
-3. Add tests (target 70%+ coverage)
-4. Submit pull request
-
-### Code Structure
+## Code structure
 
 ```
+cmd/
+  daemon/              Entry point for disco-daemon
+  disco/               Entry point for disco CLI
+    commands/          One file per subcommand
+    internal/cli/      Shared CLI utilities, table output, validation
+  gps-broadcaster/     Entry point for disco-gps-broadcaster
+
 internal/
-├── config/      - Configuration parsing and validation
-├── daemon/      - Core daemon logic, socket server
-├── discovery/   - Broadcast protocol, rate limiting
-├── dns/         - Optional DNS server
-├── logging/     - Structured logging
-├── nss/         - NSS protocol definitions
-├── security/    - Message signing/verification
-├── service/     - Service detection
-└── timesync/    - Time synchronization
+  client/              HTTP-over-Unix-socket client for daemon queries
+  config/              Configuration parsing and validation
+  daemon/              Core daemon: cache management, socket server
+  discovery/           Broadcast protocol, rate limiting, deduplication
+  dns/                 Optional DNS server
+  logging/             Structured logging (text and JSON)
+  nss/                 NSS query/response types and protocol constants
+  security/            Message signing and verification (HMAC-SHA256)
+  service/             Local port scanning and service detection
+  timesync/            GPS time synchronization
+
+libnss/                C source for libnss_disco.so.2
+gps-broadcaster/       Arduino and ESPHome implementations
 ```
-
----
-
-## References
-
-- [NSS Module Development](https://www.gnu.org/software/libc/manual/html_node/NSS-Modules.html)
-- [mDNS/DNS-SD](https://tools.ietf.org/html/rfc6762)
-- [HMAC-SHA256](https://tools.ietf.org/html/rfc2104)
-
----
-
-**Architecture by**: Flip Hess
-**AI Assistance**: GLM-4.7 and GLM-5 from [z.ai](https://z.ai)

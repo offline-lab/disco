@@ -124,14 +124,17 @@ if [ -f "$NSSWITCH_FILE" ]; then
         echo "Updating nsswitch.conf..."
         cp "$NSSWITCH_FILE" "${NSSWITCH_FILE}.backup.$(date +%Y%m%d%H%M%S)"
 
-        sed -i.bak 's/^hosts:.*$/hosts: files disco dns/' "$NSSWITCH_FILE"
-
-        if [ -f "${NSSWITCH_FILE}.bak" ]; then
-            rm "${NSSWITCH_FILE}.bak"
-        fi
+        # Insert 'disco' immediately after 'files' in the hosts line, leaving
+        # everything else (myhostname, resolve [!UNAVAIL=return], dns) in place.
+        # 'disco' must precede 'resolve [!UNAVAIL=return]' — if placed after it,
+        # the [!UNAVAIL=return] action stops the chain on NOTFOUND and disco is
+        # never reached.
+        sed -i '/^hosts:/ s/files/files disco/' "$NSSWITCH_FILE"
 
         echo "Updated: $NSSWITCH_FILE"
         echo "Backup created: ${NSSWITCH_FILE}.backup.*"
+        echo "Current hosts line:"
+        grep "^hosts:" "$NSSWITCH_FILE"
     fi
 else
     echo "Warning: $NSSWITCH_FILE not found"
