@@ -44,3 +44,6 @@ Thumbs.db
 # Coverage
 coverage.out
 coverage.html
+
+# Generated docs site
+docs/public/
