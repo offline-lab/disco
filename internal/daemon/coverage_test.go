@@ -729,6 +729,227 @@ func TestHealthTracker_GetStaticHosts(t *testing.T) {
 	}
 }
 
+func TestSocketServer_HandleLocationList(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	ls := NewLocationStore()
+	ls.AddOrUpdate(makeLocationMsg("gps-1", 52.370216, 4.895168, 3.5, 8, time.Now().Unix()))
+	ls.AddOrUpdate(makeLocationMsg("gps-2", 51.5074, -0.1278, 11.0, 10, time.Now().Unix()))
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(ls)
+
+	resp := server.handleLocationList(&nss.Query{Type: nss.LocationList, RequestID: "loc-001"})
+
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("Response type = %s, want OK", resp.Type)
+	}
+	if resp.Count != 2 {
+		t.Errorf("Count = %d, want 2", resp.Count)
+	}
+	if len(resp.Locations) != 2 {
+		t.Errorf("Locations len = %d, want 2", len(resp.Locations))
+	}
+}
+
+func TestSocketServer_HandleLocationList_Empty(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(NewLocationStore())
+
+	resp := server.handleLocationList(&nss.Query{Type: nss.LocationList, RequestID: "loc-002"})
+
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("Response type = %s, want OK", resp.Type)
+	}
+	if resp.Count != 0 {
+		t.Errorf("Count = %d, want 0 for empty store", resp.Count)
+	}
+}
+
+func TestSocketServer_HandleLocationList_NoStore(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	// no SetLocationStore called
+
+	resp := server.handleLocationList(&nss.Query{Type: nss.LocationList, RequestID: "loc-003"})
+
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("Response type = %s, want OK", resp.Type)
+	}
+	if resp.Count != 0 {
+		t.Errorf("Count = %d, want 0 when no location store is set", resp.Count)
+	}
+}
+
+func TestSocketServer_HandleLocationShow(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	ls := NewLocationStore()
+	ls.AddOrUpdate(makeLocationMsg("gps-pi-01", 52.370216, 4.895168, 3.5, 8, time.Now().Unix()))
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(ls)
+
+	resp := server.handleLocationShow(&nss.Query{
+		Type:      nss.LocationShow,
+		Name:      "gps-pi-01",
+		RequestID: "loc-004",
+	})
+
+	if resp.Type != nss.ResponseOK {
+		t.Fatalf("Response type = %s, want OK", resp.Type)
+	}
+	if len(resp.Locations) != 1 {
+		t.Fatalf("Locations len = %d, want 1", len(resp.Locations))
+	}
+	if resp.Locations[0].SourceID != "gps-pi-01" {
+		t.Errorf("SourceID = %s, want gps-pi-01", resp.Locations[0].SourceID)
+	}
+	if resp.Locations[0].Latitude != 52.370216 {
+		t.Errorf("Latitude = %f, want 52.370216", resp.Locations[0].Latitude)
+	}
+}
+
+func TestSocketServer_HandleLocationShow_NotFound(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(NewLocationStore())
+
+	resp := server.handleLocationShow(&nss.Query{
+		Type:      nss.LocationShow,
+		Name:      "nonexistent",
+		RequestID: "loc-005",
+	})
+
+	if resp.Type != nss.ResponseNotFound {
+		t.Errorf("Response type = %s, want NOTFOUND", resp.Type)
+	}
+}
+
+func TestSocketServer_HandleLocationShow_NoName(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(NewLocationStore())
+
+	resp := server.handleLocationShow(&nss.Query{
+		Type:      nss.LocationShow,
+		RequestID: "loc-006",
+	})
+
+	if resp.Type != nss.ResponseError {
+		t.Errorf("Response type = %s, want ERROR for missing name", resp.Type)
+	}
+}
+
+func TestSocketServer_HandleLocationShow_NoStore(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	// no SetLocationStore called
+
+	resp := server.handleLocationShow(&nss.Query{
+		Type:      nss.LocationShow,
+		Name:      "gps-1",
+		RequestID: "loc-007",
+	})
+
+	if resp.Type != nss.ResponseNotFound {
+		t.Errorf("Response type = %s, want NOTFOUND when no location store is set", resp.Type)
+	}
+}
+
+func TestSocketServer_HandleQuery_LocationTypes(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	ls := NewLocationStore()
+	ls.AddOrUpdate(makeLocationMsg("gps-1", 52.0, 4.0, 0, 8, time.Now().Unix()))
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(ls)
+
+	tests := []struct {
+		name      string
+		queryType nss.MessageType
+		queryName string
+	}{
+		{"LocationList", nss.LocationList, ""},
+		{"LocationShow", nss.LocationShow, "gps-1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := server.handleQuery(&nss.Query{
+				Type:      tt.queryType,
+				Name:      tt.queryName,
+				RequestID: "dispatch-" + tt.name,
+			})
+			if resp.Error == "unknown query type" {
+				t.Errorf("Query type %s not dispatched", tt.queryType)
+			}
+		})
+	}
+}
+
+func TestSocketServer_HandleQuery_LocationTypes_InHandleQuery(t *testing.T) {
+	store := NewRecordStore(time.Hour, &config.HealthConfig{
+		GracePeriod: 30 * time.Second,
+		ExpireAfter: 5 * time.Minute,
+	}, nil)
+	defer store.Stop()
+
+	server := NewSocketServer("/tmp/test.sock", store)
+	server.SetLocationStore(NewLocationStore())
+
+	// Both types must reach their handlers, not fall through to "unknown query type"
+	for _, queryType := range []nss.MessageType{nss.LocationList, nss.LocationShow} {
+		resp := server.handleQuery(&nss.Query{
+			Type:      queryType,
+			Name:      "gps-1",
+			RequestID: "disp-" + string(queryType),
+		})
+		if resp.Error == "unknown query type" {
+			t.Errorf("handleQuery did not dispatch %s", queryType)
+		}
+	}
+}
+
 func TestHealthTracker_IsStatic(t *testing.T) {
 	staticHosts := map[string]config.StaticHost{
 		"static1": {Addresses: []string{"1.1.1.1"}},

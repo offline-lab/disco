@@ -200,6 +200,28 @@ disco check --json
 
 ---
 
+## disco location
+
+List GPS location broadcasts received by the daemon. The daemon stores the latest fix per source — each source corresponds to one GPS device on the network.
+
+```bash
+disco location
+disco location --json
+```
+
+**Output columns**: SOURCE, LATITUDE, LONGITUDE, ALTITUDE, SATS, LAST SEEN
+
+### disco location show
+
+Show full detail for one GPS source.
+
+```bash
+disco location show gps-timeserver
+disco location show gps-pi-01 --json
+```
+
+---
+
 ## disco announce
 
 Send manual broadcast announcements. Does not require a running daemon.

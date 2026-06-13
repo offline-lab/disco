@@ -1,8 +1,13 @@
 # GPS Broadcaster
 
-The GPS broadcaster sends `TIME_ANNOUNCE` messages over UDP so that disco-daemon can synchronize the system clock. Three implementations are available: the Go binary (built as part of this project), an Arduino sketch, and an ESPHome component for ESP32/ESP8266.
+GPS broadcasters send UDP messages on port 5354 — the same port disco uses for host discovery. Two message types are produced:
 
-All implementations broadcast on UDP port 5354, the same port disco uses for host discovery.
+| Type | Purpose |
+|------|---------|
+| `TIME_ANNOUNCE` | Stratum-1 time reference; consumed by `time_sync` |
+| `LOCATION_ANNOUNCE` | GPS fix data (lat/lon/alt/satellites); stored in the location index |
+
+Three implementations send `TIME_ANNOUNCE`: the Go binary (built as part of this project), an Arduino sketch, and an ESPHome component. The Heltec Wireless Tracker (`esp32-timesyncd`) sends **both** message types.
 
 ## Go binary (Raspberry Pi, Linux)
 
@@ -119,6 +124,39 @@ custom_component:
       return {broadcaster};
 ```
 
+## Heltec Wireless Tracker (esp32-timesyncd)
+
+The `esp32-timesyncd` firmware runs on a Heltec Wireless Tracker and sends both message types:
+
+- **`TIME_ANNOUNCE`** — every 16 seconds when a GPS fix is held
+- **`LOCATION_ANNOUNCE`** — every 60 seconds when a GPS fix is held
+
+The location broadcast payload:
+
+```json
+{
+  "type": "LOCATION_ANNOUNCE",
+  "message_id": "gps-timeserver-<millis>",
+  "timestamp": 1718000000,
+  "source_id": "gps-timeserver",
+  "location": {
+    "latitude": 52.370216,
+    "longitude": 4.895168,
+    "altitude": 3.5,
+    "fix": true,
+    "satellites": 8
+  }
+}
+```
+
+The daemon stores the latest fix per `source_id`. Query it with:
+
+```bash
+disco location
+disco location show gps-timeserver
+disco location --json
+```
+
 ## Verify
 
 On any node running disco-daemon with `time_sync.enabled: true`, listen for broadcasts:
@@ -127,10 +165,18 @@ On any node running disco-daemon with `time_sync.enabled: true`, listen for broa
 sudo tcpdump -i any udp port 5354 -A
 ```
 
-Then check whether the daemon received a time update:
+Check time sync:
 
 ```bash
 disco time
 ```
 
-`Sources: 1` (or more) confirms the daemon received a TIME_ANNOUNCE message.
+`Sources: 1` (or more) confirms the daemon received a `TIME_ANNOUNCE` message.
+
+Check location data:
+
+```bash
+disco location
+```
+
+A row in the output confirms the daemon received a `LOCATION_ANNOUNCE` message.

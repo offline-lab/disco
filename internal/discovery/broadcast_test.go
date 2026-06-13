@@ -250,6 +250,113 @@ func TestMessageType_Constants(t *testing.T) {
 	if MessageTimeAnnounce != "TIME_ANNOUNCE" {
 		t.Errorf("MessageTimeAnnounce = %s, want TIME_ANNOUNCE", MessageTimeAnnounce)
 	}
+	if MessageLocationAnnounce != "LOCATION_ANNOUNCE" {
+		t.Errorf("MessageLocationAnnounce = %s, want LOCATION_ANNOUNCE", MessageLocationAnnounce)
+	}
+}
+
+func TestLocationAnnounceMessage_Marshal(t *testing.T) {
+	msg := &LocationAnnounceMessage{
+		Type:      MessageLocationAnnounce,
+		MessageID: "gps-timeserver-123456",
+		Timestamp: 1718000000,
+		SourceID:  "gps-timeserver",
+		Location: LocationInfo{
+			Latitude:   52.370216,
+			Longitude:  4.895168,
+			Altitude:   3.5,
+			Fix:        true,
+			Satellites: 8,
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	var decoded LocationAnnounceMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if decoded.Type != MessageLocationAnnounce {
+		t.Errorf("Type = %s, want LOCATION_ANNOUNCE", decoded.Type)
+	}
+	if decoded.SourceID != "gps-timeserver" {
+		t.Errorf("SourceID = %s, want gps-timeserver", decoded.SourceID)
+	}
+	if decoded.Timestamp != 1718000000 {
+		t.Errorf("Timestamp = %d, want 1718000000", decoded.Timestamp)
+	}
+	if decoded.Location.Latitude != 52.370216 {
+		t.Errorf("Latitude = %f, want 52.370216", decoded.Location.Latitude)
+	}
+	if decoded.Location.Longitude != 4.895168 {
+		t.Errorf("Longitude = %f, want 4.895168", decoded.Location.Longitude)
+	}
+	if decoded.Location.Altitude != 3.5 {
+		t.Errorf("Altitude = %f, want 3.5", decoded.Location.Altitude)
+	}
+	if decoded.Location.Satellites != 8 {
+		t.Errorf("Satellites = %d, want 8", decoded.Location.Satellites)
+	}
+	if !decoded.Location.Fix {
+		t.Error("Fix = false, want true")
+	}
+}
+
+func TestLocationAnnounceMessage_ESP32Payload(t *testing.T) {
+	// Verifies that the exact JSON the ESP32 firmware produces parses correctly.
+	payload := `{"type":"LOCATION_ANNOUNCE","message_id":"gps-timeserver-12345","timestamp":1718000000,"source_id":"gps-timeserver","location":{"latitude":52.370216,"longitude":4.895168,"altitude":3.5,"fix":true,"satellites":8}}`
+
+	var msg LocationAnnounceMessage
+	if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+		t.Fatalf("Failed to unmarshal ESP32 payload: %v", err)
+	}
+
+	if msg.Type != MessageLocationAnnounce {
+		t.Errorf("Type = %s, want LOCATION_ANNOUNCE", msg.Type)
+	}
+	if msg.SourceID != "gps-timeserver" {
+		t.Errorf("SourceID = %s, want gps-timeserver", msg.SourceID)
+	}
+	if msg.Timestamp != 1718000000 {
+		t.Errorf("Timestamp = %d, want 1718000000", msg.Timestamp)
+	}
+	if msg.Location.Satellites != 8 {
+		t.Errorf("Satellites = %d, want 8", msg.Location.Satellites)
+	}
+	if msg.Location.Latitude != 52.370216 {
+		t.Errorf("Latitude = %f, want 52.370216", msg.Location.Latitude)
+	}
+}
+
+func TestLocationInfo_NegativeLongitude(t *testing.T) {
+	msg := &LocationAnnounceMessage{
+		Type:     MessageLocationAnnounce,
+		SourceID: "gps-west",
+		Location: LocationInfo{
+			Latitude:  51.5074,
+			Longitude: -0.1278,
+			Altitude:  11.0,
+			Fix:       true,
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded LocationAnnounceMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.Location.Longitude != -0.1278 {
+		t.Errorf("Longitude = %f, want -0.1278", decoded.Location.Longitude)
+	}
 }
 
 func TestRateLimiter_Defaults(t *testing.T) {

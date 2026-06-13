@@ -26,6 +26,7 @@ type Daemon struct {
 	hostname        string
 	machineID       string
 	store           *RecordStore
+	locationStore   *LocationStore
 	socket          *SocketServer
 	announcer       *discovery.Announcer
 	listener        *discovery.Listener
@@ -57,6 +58,7 @@ func New(cfg *config.Config) (*Daemon, error) {
 	machineID := readMachineID()
 
 	store := NewRecordStore(cfg.Daemon.RecordTTL, &cfg.Health, cfg.StaticHosts)
+	locationStore := NewLocationStore()
 	socket := NewSocketServer(cfg.Daemon.SocketPath, store)
 
 	var keyManager *security.KeyManager
@@ -73,12 +75,13 @@ func New(cfg *config.Config) (*Daemon, error) {
 	}
 
 	d := &Daemon{
-		config:    cfg,
-		hostname:  hostname,
-		machineID: machineID,
-		store:     store,
-		socket:    socket,
-		stopChan:  make(chan struct{}),
+		config:        cfg,
+		hostname:      hostname,
+		machineID:     machineID,
+		store:         store,
+		locationStore: locationStore,
+		socket:        socket,
+		stopChan:      make(chan struct{}),
 	}
 
 	if cfg.Discovery.Enabled {
@@ -109,6 +112,8 @@ func New(cfg *config.Config) (*Daemon, error) {
 			d.detector = detector
 		}
 	}
+
+	d.socket.SetLocationStore(d.locationStore)
 
 	if cfg.TimeSync.Enabled {
 		d.timeSync = timesync.NewTimeSyncService(&cfg.TimeSync, keyManager)
@@ -183,6 +188,7 @@ func (d *Daemon) Run() error {
 	if d.listener != nil {
 		go d.listener.Start(d.stopChan)
 		go d.processDiscoveryMessages()
+		go d.processLocationMessages()
 		logging.Info("Listener started", nil)
 	}
 
@@ -237,6 +243,13 @@ func (d *Daemon) processDiscoveryMessages() {
 func (d *Daemon) processTimeMessages() {
 	for msg := range d.listener.TimeMessages() {
 		d.timeSync.ProcessMessage(msg)
+	}
+}
+
+// processLocationMessages handles incoming location broadcasts
+func (d *Daemon) processLocationMessages() {
+	for msg := range d.listener.LocationMessages() {
+		d.locationStore.AddOrUpdate(msg)
 	}
 }
 
