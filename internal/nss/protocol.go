@@ -27,6 +27,9 @@ const (
 	ServicesForget  MessageType = "SERVICES_FORGET"
 	ServiceAnnounce MessageType = "SERVICE_ANNOUNCE"
 
+	LocationList MessageType = "LOCATION_LIST"
+	LocationShow MessageType = "LOCATION_SHOW"
+
 	ResponseOK       MessageType = "OK"
 	ResponseNotFound MessageType = "NOTFOUND"
 	ResponseError    MessageType = "ERROR"
@@ -44,18 +47,19 @@ type Query struct {
 }
 
 type Response struct {
-	Type      MessageType     `json:"type"`
-	RequestID string          `json:"request_id"`
-	Name      string          `json:"name,omitempty"`
-	Aliases   []string        `json:"aliases,omitempty"`
-	AddrType  int             `json:"addr_type,omitempty"`
-	AddrLen   int             `json:"addr_len,omitempty"`
-	Addrs     []string        `json:"addrs,omitempty"`
-	Error     string          `json:"error,omitempty"`
-	Records   []byte          `json:"records,omitempty"`
-	Count     int             `json:"count,omitempty"`
-	Hosts     []HostHealth    `json:"hosts,omitempty"`
-	Services  []ServiceHealth `json:"services,omitempty"`
+	Type      MessageType      `json:"type"`
+	RequestID string           `json:"request_id"`
+	Name      string           `json:"name,omitempty"`
+	Aliases   []string         `json:"aliases,omitempty"`
+	AddrType  int              `json:"addr_type,omitempty"`
+	AddrLen   int              `json:"addr_len,omitempty"`
+	Addrs     []string         `json:"addrs,omitempty"`
+	Error     string           `json:"error,omitempty"`
+	Records   []byte           `json:"records,omitempty"`
+	Count     int              `json:"count,omitempty"`
+	Hosts     []HostHealth     `json:"hosts,omitempty"`
+	Services  []ServiceHealth  `json:"services,omitempty"`
+	Locations []LocationHealth `json:"locations,omitempty"`
 }
 
 type HostHealth struct {
@@ -76,6 +80,17 @@ type ServiceHealth struct {
 	Hosts    []string `json:"hosts"`
 	Aliases  []string `json:"aliases,omitempty"`
 	Status   string   `json:"status"`
+}
+
+type LocationHealth struct {
+	SourceID    string  `json:"source_id"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Altitude    float64 `json:"altitude"`
+	Satellites  int     `json:"satellites"`
+	Fix         bool    `json:"fix"`
+	LastSeen    int64   `json:"last_seen"`
+	LastSeenAgo string  `json:"last_seen_ago"`
 }
 
 // Record represents a host record stored in the daemon

@@ -14,10 +14,11 @@ import (
 type MessageType string
 
 const (
-	MessageAnnounce     MessageType = "ANNOUNCE"
-	MessageQuery        MessageType = "QUERY"
-	MessageResponse     MessageType = "RESPONSE"
-	MessageTimeAnnounce MessageType = "TIME_ANNOUNCE"
+	MessageAnnounce         MessageType = "ANNOUNCE"
+	MessageQuery            MessageType = "QUERY"
+	MessageResponse         MessageType = "RESPONSE"
+	MessageTimeAnnounce     MessageType = "TIME_ANNOUNCE"
+	MessageLocationAnnounce MessageType = "LOCATION_ANNOUNCE"
 )
 
 type BroadcastMessage struct {
@@ -37,6 +38,23 @@ type ServiceInfo struct {
 	Port    int      `json:"port"`
 	Addr    string   `json:"addr"`
 	Aliases []string `json:"aliases,omitempty"`
+}
+
+type LocationInfo struct {
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Altitude   float64 `json:"altitude"`
+	Fix        bool    `json:"fix"`
+	Satellites int     `json:"satellites"`
+}
+
+type LocationAnnounceMessage struct {
+	Type      MessageType               `json:"type"`
+	MessageID string                    `json:"message_id"`
+	Timestamp int64                     `json:"timestamp"`
+	SourceID  string                    `json:"source_id"`
+	Location  LocationInfo              `json:"location"`
+	Signature *security.MessageSecurity `json:"signature,omitempty"`
 }
 
 type ClockInfo struct {
@@ -81,14 +99,15 @@ type Announcer struct {
 }
 
 type Listener struct {
-	broadcastAddr   string
-	messageChan     chan *BroadcastMessage
-	timeMessageChan chan *TimeAnnounceMessage
-	conns           []*net.UDPConn
-	duplicateFilter *DuplicateFilter
-	keyManager      *security.KeyManager
-	requireSigned   bool
-	wg              sync.WaitGroup
+	broadcastAddr       string
+	messageChan         chan *BroadcastMessage
+	timeMessageChan     chan *TimeAnnounceMessage
+	locationMessageChan chan *LocationAnnounceMessage
+	conns               []*net.UDPConn
+	duplicateFilter     *DuplicateFilter
+	keyManager          *security.KeyManager
+	requireSigned       bool
+	wg                  sync.WaitGroup
 
 	bufPool sync.Pool
 }
@@ -379,13 +398,14 @@ func NewListener(broadcastAddr string, keyManager *security.KeyManager, requireS
 	}
 
 	return &Listener{
-		broadcastAddr:   broadcastAddr,
-		messageChan:     make(chan *BroadcastMessage, 100),
-		timeMessageChan: make(chan *TimeAnnounceMessage, 100),
-		conns:           []*net.UDPConn{conn},
-		duplicateFilter: NewDuplicateFilter(5 * time.Minute),
-		keyManager:      keyManager,
-		requireSigned:   requireSigned,
+		broadcastAddr:       broadcastAddr,
+		messageChan:         make(chan *BroadcastMessage, 100),
+		timeMessageChan:     make(chan *TimeAnnounceMessage, 100),
+		locationMessageChan: make(chan *LocationAnnounceMessage, 100),
+		conns:               []*net.UDPConn{conn},
+		duplicateFilter:     NewDuplicateFilter(5 * time.Minute),
+		keyManager:          keyManager,
+		requireSigned:       requireSigned,
 		bufPool: sync.Pool{
 			New: func() interface{} { return make([]byte, 4096) },
 		},
@@ -431,6 +451,11 @@ func (l *Listener) Start(stopChan chan struct{}) {
 
 					if raw.Type == string(MessageTimeAnnounce) {
 						l.handleTimeMessage(data, stopChan)
+						continue
+					}
+
+					if raw.Type == string(MessageLocationAnnounce) {
+						l.handleLocationMessage(data, stopChan)
 						continue
 					}
 
@@ -516,12 +541,27 @@ func (l *Listener) handleTimeMessage(data []byte, stopChan chan struct{}) {
 	}
 }
 
+func (l *Listener) handleLocationMessage(data []byte, stopChan chan struct{}) {
+	var locMsg LocationAnnounceMessage
+	if err := json.Unmarshal(data, &locMsg); err != nil {
+		return
+	}
+	select {
+	case l.locationMessageChan <- &locMsg:
+	case <-stopChan:
+	}
+}
+
 func (l *Listener) Messages() <-chan *BroadcastMessage {
 	return l.messageChan
 }
 
 func (l *Listener) TimeMessages() <-chan *TimeAnnounceMessage {
 	return l.timeMessageChan
+}
+
+func (l *Listener) LocationMessages() <-chan *LocationAnnounceMessage {
+	return l.locationMessageChan
 }
 
 func (l *Listener) Stop() {
@@ -531,6 +571,7 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 	close(l.messageChan)
 	close(l.timeMessageChan)
+	close(l.locationMessageChan)
 	if l.duplicateFilter != nil {
 		l.duplicateFilter.Stop()
 	}

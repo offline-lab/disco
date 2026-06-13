@@ -20,6 +20,7 @@ const maxConnections = 100
 type SocketServer struct {
 	socketPath      string
 	store           *RecordStore
+	locationStore   *LocationStore
 	timeSync        *timesync.TimeSyncService
 	announceService func(name string, port int, aliases []string) error
 	listener        net.Listener
@@ -39,6 +40,10 @@ func NewSocketServer(socketPath string, store *RecordStore) *SocketServer {
 
 func (s *SocketServer) SetTimeSync(ts *timesync.TimeSyncService) {
 	s.timeSync = ts
+}
+
+func (s *SocketServer) SetLocationStore(ls *LocationStore) {
+	s.locationStore = ls
 }
 
 func (s *SocketServer) SetAnnounceService(fn func(name string, port int, aliases []string) error) {
@@ -160,6 +165,10 @@ func (s *SocketServer) handleQuery(query *nss.Query) *nss.Response {
 		return s.handleServicesForget(query)
 	case nss.ServiceAnnounce:
 		return s.handleServiceAnnounce(query)
+	case nss.LocationList:
+		return s.handleLocationList(query)
+	case nss.LocationShow:
+		return s.handleLocationShow(query)
 	default:
 		return nss.NewErrorResponse(query.RequestID, "unknown query type")
 	}
@@ -531,6 +540,52 @@ func (s *SocketServer) handleQueryListServices(query *nss.Query) *nss.Response {
 		RequestID: query.RequestID,
 		Records:   data,
 		Count:     len(services),
+	}
+}
+
+func (s *SocketServer) handleLocationList(query *nss.Query) *nss.Response {
+	if s.locationStore == nil {
+		return &nss.Response{
+			Type:      nss.ResponseOK,
+			RequestID: query.RequestID,
+			Locations: []nss.LocationHealth{},
+			Count:     0,
+		}
+	}
+
+	records := s.locationStore.List()
+	locations := make([]nss.LocationHealth, len(records))
+	for index, record := range records {
+		locations[index] = *record
+	}
+
+	return &nss.Response{
+		Type:      nss.ResponseOK,
+		RequestID: query.RequestID,
+		Locations: locations,
+		Count:     len(locations),
+	}
+}
+
+func (s *SocketServer) handleLocationShow(query *nss.Query) *nss.Response {
+	if query.Name == "" {
+		return nss.NewErrorResponse(query.RequestID, "source ID required")
+	}
+
+	if s.locationStore == nil {
+		return nss.NewNotFoundResponse(query.RequestID)
+	}
+
+	record, ok := s.locationStore.Get(query.Name)
+	if !ok {
+		return nss.NewNotFoundResponse(query.RequestID)
+	}
+
+	return &nss.Response{
+		Type:      nss.ResponseOK,
+		RequestID: query.RequestID,
+		Locations: []nss.LocationHealth{*record},
+		Count:     1,
 	}
 }
 
